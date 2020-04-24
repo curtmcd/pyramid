@@ -39,12 +39,14 @@
 } def
 
 /vbinop {				% v1 v2 {op} ==> vr
+    /_op exch def
+    /_v2 exch def
+    /_v1 exch def
     [
-	3 index 0 get 3 index 0 get 3 index exec
-	4 index 1 get 4 index 1 get 4 index exec
-	5 index 2 get 5 index 2 get 5 index exec
+	_v1 0 get _v2 0 get _op exec
+	_v1 1 get _v2 1 get _op exec
+	_v1 2 get _v2 2 get _op exec
     ]
-    exch pop exch pop exch pop
 } def
 
 /vadd { {add} vbinop } def
@@ -52,37 +54,34 @@
 
 % Vector divide
 /vdiv {				% v r ==> (v/r)
+    /_r exch def
+    /_v exch def
     [
-	2 index 0 get 2 index div
-	3 index 1 get 3 index div
-	4 index 2 get 4 index div
+	_v 0 get _r div
+	_v 1 get _r div
+	_v 2 get _r div
     ]
-    exch pop exch pop
 } def
 
 % 3D dot product
 /vdot {				% v1 v2 ==> vd
-    				% [x1 y1 z1] [x2 y2 z2]
-    1 index 0 get 		% [x1 y1 z1] [x2 y2 z2] x1
-    1 index 0 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2)
-    2 index 1 get		% [x1 y1 z1] [x2 y2 z2] (x1*x2) y1
-    2 index 1 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2)
-    3 index 2 get		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2) z1
-    3 index 2 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2) (z1*z2)
-    add add			% [x1 y1 z1] [x2 y2 z2] vd
-    exch pop exch pop		% vd
+    /_v2 exch def
+    /_v1 exch def
+    _v1 0 get _v2 0 get mul	% (x1*x2)
+    _v1 1 get _v2 1 get mul	% (x1*x2) (y1*y2)
+    _v1 2 get _v2 2 get mul	% (x1*x2) (y1*y2) (z1*z2)
+    add add			% vd
 } def
 
 % 3D cross product
 /vcross {			% v1 v2 ==> vc
+    /_v2 exch def
+    /_v1 exch def
     [
-    				% [x1 y1 z1] [x2 y2 z2] [
-    2 index 1 get 2 index 2 get mul 3 index 2 get 3 index 1 get mul sub
-    3 index 2 get 3 index 0 get mul 4 index 0 get 4 index 2 get mul sub
-    4 index 0 get 4 index 1 get mul 5 index 1 get 5 index 0 get mul sub
-    				% [x1 y1 z1] [x2 y2 z2] [ dx dy dz
+	_v1 1 get _v2 2 get mul _v1 2 get _v2 1 get mul sub	% (y1*z2 - z1*y2)
+	_v1 2 get _v2 0 get mul _v1 0 get _v2 2 get mul sub	% (z1*x2 - x1*z2)
+	_v1 0 get _v2 1 get mul _v1 1 get _v2 0 get mul sub	% (x1*y2 - y1*x2)
     ]
-    exch pop exch pop		% [(y1*z2 - z1*y2) (z1*x2 - x1*z2) (x1*y2 - y1*x2)]
 } def
 
 % Vector magnitude
@@ -129,19 +128,18 @@
 
 % Map a 3D point q to a 2D point p
 /xview {	% q ==> p
-    3 dict begin   aload pop   /z exch def   /y exch def   /x exch def
+    aload pop /_z exch def /_y exch def /_x exch def
     [
 	% screen x
-	y
+	_y
 	PageW 2 div mul
 	PageW 2 div add
 
 	% screen y (assumes PageW is less than or equal to pageH)
-	z
+	_z
 	PageW 2 div mul
 	PageH 2 div add
     ]
-    end
 } def
 
 % Take the midpoint of a line between two points in space
@@ -194,46 +192,33 @@
 %   [4 [a b c d]] e ==> [5 [a b c d e x x x]]
 
 % Create an empty buffer
-/buf_new {			% buf_new ==> buffer
+/buf_new {					% buf_new ==> buffer
     [ 0 [ null ] ]
 } def
 
 % Add an item to the end of a buffer, expanding it if necessary.
-/buf_add {			% buffer item buf_add ==>
-    				% [3 [a b c x]] e
-    1 index aload pop length	% [3 [a b c x]] e 3 4	% occupancy=3, capacity=4
-    eq				% [3 [a b c x]] e bool
-    {
-	% If full, double the allocation
-				% [4 [a b c d]] e
-	1 index aload pop	% [4 [a b c d]] e 4 [a b c d]
-	exch 2 mul array	% [4 [a b c d]] e [a b c d] [x x x x x x x x]
-	dup 0			% [4 [a b c d]] e [a b c d] [x x x x x x x x] [x x x x x x x x] 0
-	4 3 roll		% [4 [a b c d]] e [x x x x x x x x] [x x x x x x x x] 0 [a b c d]
-	putinterval		% [4 [a b c d]] e [a b c d x x x x]
-
-	2 index 1		% [4 [a b c d]] e [a b c d x x x x] [4 [a b c d]] 1
-	3 2 roll		% [4 [a b c d]] e [4 [a b c d]] 1 [a b c d x x x x]
-	put			% [4 [a b c d x x x x]] e
+/buf_add {					% buffer item buf_add ==>
+    /_item exch def
+    /_buffer exch def
+    /_occupancy _buffer 0 get def
+    /_storage _buffer 1 get def
+    _storage length _occupancy eq
+    {	% If full, double the allocation
+	_storage length 2 mul array		% [x x x x x x x x]
+	dup 0 _storage putinterval		% [a b c d x x x x]
+	/_storage exch def
+	_buffer 1 _storage put
     } if
 
-    % Write item at insert position
-    1 index 0 get		% [3 [a b c x]] e 3
-    dup 1 add exch		% [3 [a b c x]] e 4 3
-    3 index 1 get		% [3 [a b c x]] e 4 3 [a b c x]
-    exch			% [3 [a b c x]] e 4 [a b c x] 3
-    4 3 roll			% [3 [a b c x]] 4 [a b c x] 3 e
-    put				% [3 [a b c e]] 4
-    0 exch			% [3 [a b c e]] 0 4
-    put				% --
+    _storage _occupancy _item put
+    _buffer 0 _occupancy 1 add put
 } def
 
 % Convert a buffer to array (no copying required)
-/buf_toarray {			% buffer => array
-    				% [3 [a b c x]]
-    aload pop			% 3 [a b c x]
-    exch 0 exch			% [a b c x] 0 3
-    getinterval			% [a b c]
+/buf_toarray {					% buffer => array
+    aload pop					% 3 [a b c x]
+    exch 0 exch					% [a b c x] 0 3
+    getinterval					% [a b c]
 } def
 
 %%%%
@@ -353,7 +338,7 @@
     } forall
 } def
 
-0 10 3600 {
+%0 10 3600 {
 %    /Yaw exch def
 %    /Pitch exch def
 %    /Roll exch def
@@ -363,4 +348,4 @@
 
     render
     showpage
-} for
+%} for

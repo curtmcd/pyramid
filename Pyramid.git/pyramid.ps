@@ -16,43 +16,72 @@
 
 % Coordinate systems
 %
-%    3D: x goes right, y goes back into screen, z goes up
+%    3D: x goes toward viewer, y goes right, z goes up
 %    2D: x goes right, y goes down
 %
 % User-Adjustable Parameters:
 %
-% Adjust viewing angle by modifying alpha and beta.
-% The pyramid is originally seen level with the front edge.
-% It is then rotated around the Z axis by alpha
-% (front corner moving right), then around the Y (horizonal)
-% axis by beta (top corner moving down).
+% Adjust rotation of pyramid by modifying Roll, Pitch and Yaw angles.
 %
-% The pyramid is defined by four points, and is broken into
-% sub-pyramids by connecting the midpoints of the six edges.
+% The outermost pyramid is defined by four points, and is broken into
+% sub-pyramids by connecting midpoints of the six edges.
 
-%/Alpha		50    def	/Beta		75    def
-/Alpha		15    def	/Beta		15    def
-/ShadeLeft	0.95  def	/ShadeRight	0.5   def
-/PageW		8.5   def	/PageH		11    def
-/Side		0.65  def	/Order		5     def
+/Roll 0 def   /Pitch 10 def   /Yaw 0 def
+/ShadeLeft 0.95 def   /ShadeRight 0.5 def
+/PageW 8.5 def   /PageH 11 def
+/Side 0.65 def
+/Order 5 def
 
 0 -1 translate
 
-/sina Alpha sin def	/sinb Beta sin def
-/cosa Alpha cos def	/cosb Beta cos def
+% Rotate a 3D point around 3 axes with Roll (x), Pitch (y), then Yaw (z).
+%
+% From Wikipedia "Rotation matrix":
+%
+%   R = Rz(Yaw) Ry(Pitch) Rx(Roll)
+%
+%       [ c(Y)  -s(Y)  0 ] [  c(P)  0  s(P) ] [ 1  0      0    ]
+%     = | s(Y)   c(Y)  0 | |  0     1  0    | | 1  c(R)  -s(R) |
+%       [ 0      0     1 ] [ -s(P)  0  c(P) ] [ 0  s(R)   c(R) ]
+%
+%       [ x c(Y) c(P) + y (c(Y) s(P) s(R) - s(Y) c(R)) + z (c(Y) s(P) c(R) + s(Y) s(R)) ]
+%  qR = | x s(Y) c(P) + y (s(Y) s(P) s(R) + c(Y) c(R)) + z (s(Y) s(P) c(R) - c(Y) s(R)) |
+%       [ x (-s(P))   + y c(P) s(R)                    + z c(P) c(R)                    ]
 
-% Transform a 3D point q into a 2D point p
-/xform {	% q ==> p
+% This matrix multiplication is expanded below.
+
+/cosR Roll  cos def   /sinR Roll  sin def
+/cosP Pitch cos def   /sinP Pitch sin def
+/cosY Yaw   cos def   /sinY Yaw   sin def
+
+/xrotate {	% q ==> q
+    3 dict begin   aload pop   /z exch def   /y exch def   /x exch def
+    [
+	x cosY mul cosP mul
+	y cosY sinP mul sinR mul sinY cosR mul sub mul add
+	z cosY sinP mul cosR mul sinY sinR mul add mul add
+
+	x sinY mul cosP mul
+	y sinY sinP mul sinR mul cosY cosR mul add mul add
+	z sinY sinP mul cosR mul cosY sinR mul sub mul add
+
+	x sinP neg mul
+	y cosP mul sinR mul add
+	z cosP mul cosR mul add
+    ]
+    end
+} def
+
+% Map a 3D point q to a 2D point p
+/xview {	% q ==> p
     3 dict begin   aload pop   /z exch def   /y exch def   /x exch def
     [
 	% screen x
-	y cosa mul x sina mul sub
-%	x
+	y
 	PageW 2 div mul
 	PageW 2 div add
 
-	% screen  y
-	%x sinb mul cosa mul y sina mul sinb mul add z cosb mul add
+	% screen y (assumes PageW is less than or equal to pageH)
 	z neg
 	PageW 2 div mul
 	PageH 2 div add
@@ -103,10 +132,10 @@
 } def
 
 /pyramid_base {
-    /p1 q1 xform def  % bottom front
-    /p2 q2 xform def  % bottom left
-    /p3 q3 xform def  % top
-    /p4 q4 xform def  % bottom right
+    /p1 q1 xview def  % bottom front
+    /p2 q2 xview def  % bottom left
+    /p3 q3 xview def  % top
+    /p4 q4 xview def  % bottom right
 
     % Fill the two visible faces with different shades
 
@@ -126,7 +155,11 @@
 /rp Side def
 /rn rp neg def
 
-Order [rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn]
+Order
+[rp rp rp] xrotate
+[rp rn rn] xrotate
+[rn rn rp] xrotate
+[rn rp rn] xrotate
 pyramid
 
 showpage

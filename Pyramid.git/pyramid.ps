@@ -3,9 +3,12 @@
 %
 % Draws a 3-D pyramid fractal, as seen in a popular text on Fractals
 %
-% Initial version from 1995:
+% Initial version from 1995
 %   Curt.McDowell@andrew.cmu.edu
 %   Carnegie-Mellon University
+%
+% Updated 2020
+%   Curt McDowell <coder@fishlet.com>
 %
 
 72 72 scale
@@ -36,12 +39,12 @@
 /xform {	% q ==> p
     3 dict begin   aload pop   /z exch def   /y exch def   /x exch def
     [
-	% x'
+	% screen x
 	y cosa mul x sina mul sub
 	PageW 2 div mul
 	PageW 2 div add
 
-	% y'
+	% screen  y
 	x sinb mul cosa mul y sina mul sinb mul add z cosb mul add
 	PageW 2 div mul
 	PageH 2 div add
@@ -65,10 +68,10 @@
     aload pop
 } def
 
-/pyramid {	% order q1 q2 q3 q4 ==> --
-    12 dict begin
+/pyramid {	% q1 q2 q3 q4 ==> --
+    11 dict begin
 
-    /q4 exch def /q3 exch def /q2 exch def /q1 exch def /order exch def
+    /q4 exch def   /q3 exch def   /q2 exch def   /q1 exch def
 
     % Generate the sub-pyramids if order > 1, else draw order 1 pyramid
     order 1 gt
@@ -80,12 +83,12 @@
 	/q24 q2 q4 mid def
 	/q34 q3 q4 mid def
 
-	/order' order 1 sub def
-
-	order' q1  q12 q13 q14 pyramid
-	order' q12 q2  q23 q24 pyramid
-	order' q14 q24 q34 q4  pyramid
-	order' q13 q23 q3  q34 pyramid
+        /order order 1 sub def
+	q1  q12 q13 q14 pyramid
+	q12 q2  q23 q24 pyramid
+	q14 q24 q34 q4  pyramid
+	q13 q23 q3  q34 pyramid
+        /order order 1 add def
     }
     {
 	/p1 q1 xform def  % bottom front
@@ -115,7 +118,8 @@
 /rp Side def
 /rn rp neg def
 
-Order [rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn]
+/order Order def
+[rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn]
 pyramid
 
 showpage

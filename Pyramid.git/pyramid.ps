@@ -22,6 +22,7 @@
 /shadeleft	0.95  def	/shaderight	0.5   def
 /pagew		8.5   def	/pageh		11    def
 /StartSize	1.6   def	/MinSize	0.2   def
+/Pers		6     def
 
 0 -1 translate
 
@@ -36,12 +37,14 @@
 	/xx exch def
 
 	yy cosa mul xx sina mul sub
+	xx neg Pers add div Pers mul
 	pagew 2 div mul		% Compute X and
 	pagew 2 div add		% leave on stack
 
 	xx sinb mul cosa mul yy sina mul sinb mul
 	add zz cosb mul add
-	pagew 2 div mul		% Compute Y and
+	xx neg Pers add div Pers mul
+	pageh 2 div mul		% Compute Y and
 	pageh 2 div add		% leave on stack
 } def
 

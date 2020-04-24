@@ -14,6 +14,11 @@
 72 72 scale
 0.5 72 div setlinewidth
 
+% Coordinate systems
+%
+%    3D: x goes right, y goes back into screen, z goes up
+%    2D: x goes right, y goes down
+%
 % User-Adjustable Parameters:
 %
 % Adjust viewing angle by modifying alpha and beta.
@@ -25,7 +30,8 @@
 % The pyramid is defined by four points, and is broken into
 % sub-pyramids by connecting the midpoints of the six edges.
 
-/Alpha		50    def	/Beta		65    def
+%/Alpha		50    def	/Beta		75    def
+/Alpha		15    def	/Beta		15    def
 /ShadeLeft	0.95  def	/ShadeRight	0.5   def
 /PageW		8.5   def	/PageH		11    def
 /Side		0.65  def	/Order		5     def
@@ -41,11 +47,13 @@
     [
 	% screen x
 	y cosa mul x sina mul sub
+%	x
 	PageW 2 div mul
 	PageW 2 div add
 
 	% screen  y
-	x sinb mul cosa mul y sina mul sinb mul add z cosb mul add
+	%x sinb mul cosa mul y sina mul sinb mul add z cosb mul add
+	z neg
 	PageW 2 div mul
 	PageH 2 div add
     ]
@@ -63,19 +71,22 @@
     end
 } def
 
-% Expand a point
-/coord {	% p ==> x y
-    aload pop
+/pmoveto {	% p ==> --
+    aload pop moveto
 } def
 
-/pyramid {      % q1 q2 q3 q4 order ==> --
-    11 dict begin
-    /order exch def   /q4 exch def   /q3 exch def   /q2 exch def   /q1 exch def
-    order 1 gt { sub_pyramid } { base_pyramid } ifelse
+/plineto {	% p ==> --
+    aload pop lineto
+} def
+
+/pyramid {	% order q1 q2 q3 q4 order ==> --
+    12 dict begin
+    /q4 exch def   /q3 exch def   /q2 exch def   /q1 exch def  /order exch def
+    order 1 gt { pyramid_sub } { pyramid_base } ifelse
     end
 } def
 
-/sub_pyramid {
+/pyramid_sub {
     /q12 q1 q2 mid def
     /q13 q1 q3 mid def
     /q14 q1 q4 mid def
@@ -83,13 +94,15 @@
     /q24 q2 q4 mid def
     /q34 q3 q4 mid def
 
-    q1  q12 q13 q14   order 1 sub   pyramid
-    q12 q2  q23 q24   order 1 sub   pyramid
-    q14 q24 q34 q4    order 1 sub   pyramid
-    q13 q23 q3  q34   order 1 sub   pyramid
+    /order' order 1 sub def
+
+    order' q1  q12 q13 q14 pyramid
+    order' q12 q2  q23 q24 pyramid
+    order' q14 q24 q34 q4  pyramid
+    order' q13 q23 q3  q34 pyramid
 } def
 
-/base_pyramid {
+/pyramid_base {
     /p1 q1 xform def  % bottom front
     /p2 q2 xform def  % bottom left
     /p3 q3 xform def  % top
@@ -98,22 +111,22 @@
     % Fill the two visible faces with different shades
 
     ShadeLeft setgray
-    p2 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
+    p2 pmoveto   p1 plineto   p3 plineto   closepath fill
 
     ShadeRight setgray
-    p4 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
+    p4 pmoveto   p1 plineto   p3 plineto   closepath fill
 
     % Draw the five visible line segments
 
     0 setgray
-    p2 coord moveto   p1 coord lineto   p4 coord lineto   p3 coord lineto
-    closepath         p3 coord moveto   p1 coord lineto   stroke
+    p2 pmoveto   p1 plineto   p4 plineto   p3 plineto
+    closepath    p3 pmoveto   p1 plineto   stroke
 } def
 
 /rp Side def
 /rn rp neg def
 
-[rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn] Order
+Order [rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn]
 pyramid
 
 showpage

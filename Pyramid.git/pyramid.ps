@@ -68,58 +68,52 @@
     aload pop
 } def
 
-/pyramid {	% q1 q2 q3 q4 ==> --
+/pyramid {      % q1 q2 q3 q4 order ==> --
     11 dict begin
-
-    /q4 exch def   /q3 exch def   /q2 exch def   /q1 exch def
-
-    % Generate the sub-pyramids if order > 1, else draw order 1 pyramid
-    order 1 gt
-    {
-	/q12 q1 q2 mid def
-	/q13 q1 q3 mid def
-	/q14 q1 q4 mid def
-	/q23 q2 q3 mid def
-	/q24 q2 q4 mid def
-	/q34 q3 q4 mid def
-
-        /order order 1 sub def
-	q1  q12 q13 q14 pyramid
-	q12 q2  q23 q24 pyramid
-	q14 q24 q34 q4  pyramid
-	q13 q23 q3  q34 pyramid
-        /order order 1 add def
-    }
-    {
-	/p1 q1 xform def  % bottom front
-	/p2 q2 xform def  % bottom left
-	/p3 q3 xform def  % top
-	/p4 q4 xform def  % bottom right
-
-	% Fill the two visible faces with different shades
-
-	ShadeLeft setgray
-	p2 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
-
-	ShadeRight setgray
-	p4 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
-
-	% Draw the five visible line segments
-
-	0 setgray
-	p2 coord moveto   p1 coord lineto   p4 coord lineto   p3 coord lineto
-	closepath         p3 coord moveto   p1 coord lineto   stroke
-    }
-    ifelse
-
+    /order exch def   /q4 exch def   /q3 exch def   /q2 exch def   /q1 exch def
+    order 1 gt { sub_pyramid } { base_pyramid } ifelse
     end
+} def
+
+/sub_pyramid {
+    /q12 q1 q2 mid def
+    /q13 q1 q3 mid def
+    /q14 q1 q4 mid def
+    /q23 q2 q3 mid def
+    /q24 q2 q4 mid def
+    /q34 q3 q4 mid def
+
+    q1  q12 q13 q14   order 1 sub   pyramid
+    q12 q2  q23 q24   order 1 sub   pyramid
+    q14 q24 q34 q4    order 1 sub   pyramid
+    q13 q23 q3  q34   order 1 sub   pyramid
+} def
+
+/base_pyramid {
+    /p1 q1 xform def  % bottom front
+    /p2 q2 xform def  % bottom left
+    /p3 q3 xform def  % top
+    /p4 q4 xform def  % bottom right
+
+    % Fill the two visible faces with different shades
+
+    ShadeLeft setgray
+    p2 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
+
+    ShadeRight setgray
+    p4 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
+
+    % Draw the five visible line segments
+
+    0 setgray
+    p2 coord moveto   p1 coord lineto   p4 coord lineto   p3 coord lineto
+    closepath         p3 coord moveto   p1 coord lineto   stroke
 } def
 
 /rp Side def
 /rn rp neg def
 
-/order Order def
-[rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn]
+[rp rp rp] [rp rn rn] [rn rn rp] [rn rp rn] Order
 pyramid
 
 showpage

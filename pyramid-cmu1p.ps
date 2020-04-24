@@ -1,0 +1,127 @@
+%!
+% Pyramidal Fractal in PostScript
+%
+% Draws a 3-D pyramid fractal, as
+% seen in a popular text on Fractals
+%
+% Author: Curt.McDowell@andrew.cmu.edu
+% Carnegie-Mellon University
+%
+
+72 72 scale
+
+% User-Adjustable Parameters:
+%
+% Adjust viewing angle by modifying alpha and beta.
+% The pyramid is originally seen level with the front edge.
+% It is then rotated around the Z axis by alpha
+% (front corner moving left), then around the Y (horizonal)
+% axis by beta (top corner moving away).
+
+/alpha		-11   def	/beta		-10   def
+/shadeleft	0.95  def	/shaderight	0.5   def
+/pagew		8.5   def	/pageh		11    def
+/StartSize	1.6   def	/MinSize	0.2   def
+/Pers		6     def
+
+0 -1 translate
+
+/sina alpha sin def		/sinb beta sin def
+/cosa alpha cos def		/cosb beta cos def
+
+% Transformation from 3-D coordinates to 2-D
+
+/xform	% x,y,z ==> x',y'
+{	/zz exch def
+	/yy exch def
+	/xx exch def
+
+	yy cosa mul xx sina mul sub
+	xx neg Pers add div Pers mul
+	pagew 2 div mul		% Compute X and
+	pagew 2 div add		% leave on stack
+
+	xx sinb mul cosa mul yy sina mul sinb mul
+	add zz cosb mul add
+	xx neg Pers add div Pers mul
+	pageh 2 div mul		% Compute Y and
+	pageh 2 div add		% leave on stack
+} def
+
+% Constants
+
+/sqr3o4	  3 sqrt    4 div	def
+/sqr3o2	  3 sqrt    2 div	def
+/sqr3o6	  3 sqrt    6 div	def
+/sqr6o3	  6 sqrt    3 div	def
+/sqr3o12  3 sqrt    12 div	def
+/sqr6o6	  6 sqrt    6 div	def
+
+/pyramid    % x,y,z,size ==> --
+{	/size exch def /z exch def /y exch def /x exch def
+
+	% (ax, ay) = Left bottom point
+	x y z
+	xform /ay exch def /ax exch def
+
+	% (bx, by) = bottom front point
+	sqr3o2 size mul x add   size 2 div y add   z
+	xform /by exch def /bx exch def
+
+	% (cx, cy) = Right bottom point
+	x   size y add   z
+	xform /cy exch def /cx exch def
+
+	% (dx, dy) = top point
+	sqr3o6 size mul x add   size 2 div y add   sqr6o3 size mul z add
+	xform /dy exch def /dx exch def
+
+	% Fill the 2 visible faces with different shades
+
+	ax ay moveto	bx by lineto	dx dy lineto	closepath
+	shadeleft	setgray		fill
+	cx cy moveto	bx by lineto	dx dy lineto	closepath
+	shaderight	setgray		fill
+
+	% Draw the 5 visible segments
+
+	0 setgray 0.1 72 div setlinewidth
+
+	ax ay moveto	bx by lineto	cx cy lineto	dx dy lineto
+	closepath	dx dy moveto	bx by lineto	stroke
+} def
+
+% Recursive routine to build a pyramid out of subpyramids
+
+/buildsave { x y z size } def
+/buildrest { /size exch def /z exch def /y exch def /x exch def } def
+
+/build	% x,y,z,size ==> --
+{	/size exch def /z exch def /y exch def /x exch def
+
+	size MinSize lt
+	{	buildsave
+		x   y   z   size   pyramid
+		buildrest
+	}
+	{	buildsave
+		x   y   z   size 2 div   build
+		buildrest
+
+		buildsave
+		x   size 2 div y add   z   size 2 div   build
+		buildrest
+
+		buildsave
+		sqr3o12 size mul x add   size 4 div y add
+		sqr6o6 size mul z add   size 2 div   build
+		buildrest
+
+		sqr3o4 size mul x add   size 4 div y add
+		z   size 2 div   build
+	} ifelse
+} def
+
+0   StartSize -2 div   StartSize sqr6o6 mul -2 div   StartSize   build
+
+showpage

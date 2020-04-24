@@ -1,0 +1,129 @@
+%!
+% Pyramidal Fractal in PostScript
+%
+% Draws a 3-D pyramid fractal, as
+% seen in a popular text on Fractals
+%
+% Author: Curt.McDowell@andrew.cmu.edu
+% Carnegie-Mellon University
+%
+
+72 72 scale
+0.1 72 div setlinewidth
+
+% User-Adjustable Parameters:
+%
+% Adjust viewing angle by modifying alpha and beta.
+% The pyramid is originally seen level with the front edge.
+% It is then rotated around the Z axis by alpha
+% (front corner moving right), then around the Y (horizonal)
+% axis by beta (top corner moving down).
+
+/Alpha		50    def	/Beta		65    def
+/ShadeLeft	0.95  def	/ShadeRight	0.5   def
+/PageW		8.5   def	/PageH		11    def
+/Side		0.65  def	/Order		5     def
+
+0 -1 translate
+
+/sina Alpha sin def	/sinb Beta sin def
+/cosa Alpha cos def	/cosb Beta cos def
+
+% Transformation from 3-D coordinates to 2-D
+
+/xform	% q0 ==> x' y'
+{
+	/q0 exch def
+
+	q0 1 get cosa mul q0 0 get sina mul sub
+	PageW 2 div mul		% Compute X and
+	PageW 2 div add		% leave on stack
+
+	q0 0 get sinb mul cosa mul q0 1 get sina mul sinb mul
+	add q0 2 get cosb mul add
+	PageW 2 div mul		% Compute Y and
+	PageH 2 div add		% leave on stack
+} def
+
+% The pyramid is defined by four points, and is broken into
+% sub-pyramids by connecting the midpoints of the six edges.
+
+/midpoint	% q1 q2 ==> (q1 + q2) / 2
+{
+	/q2 exch def /q1 exch def
+	q1 0 get q2 0 get add 2 div
+	q1 1 get q2 1 get add 2 div
+	q1 2 get q2 2 get add 2 div
+	3 array astore
+} def
+
+/psave { /p1 p1 /p2 p2 /p3 p3 /p4 p4
+	 /p12 p12 /p13 p13 /p14 p14 /p23 p23 /p24 p24 /p34 p34
+	 /order order } def
+
+/prest { def def def def
+	 def def def def def def
+	 def } def
+
+/pyramid	% order p1 p2 p3 p4 ==> --
+{
+	/p4 exch def /p3 exch def /p2 exch def /p1 exch def /order exch def
+
+	order 1 gt
+	{
+		% Generate the sub-pyramids if order is greater than 1
+		% Compute the six intercept points.
+
+		/p12 p1 p2 midpoint def
+		/p13 p1 p3 midpoint def
+		/p14 p1 p4 midpoint def
+		/p23 p2 p3 midpoint def
+		/p24 p2 p4 midpoint def
+		/p34 p3 p4 midpoint def
+
+		/order order 1 sub def
+
+		psave order p1  p12 p13 p14 pyramid prest
+		psave order p12 p2  p23 p24 pyramid prest
+		psave order p14 p24 p34 p4  pyramid prest
+		psave order p13 p23 p3  p34 pyramid prest
+	}
+	{
+		% Draw order 1 pyramid
+
+		% p2 = (ax, ay) = left bottom point
+		p2 xform /ay exch def /ax exch def
+
+		% p1 = (bx, by) = bottom front point
+		p1 xform /by exch def /bx exch def
+
+		% p4 = (cx, cy) = right bottom point
+		p4 xform /cy exch def /cx exch def
+
+		% p3 = (dx, dy) = top point
+		p3 xform /dy exch def /dx exch def
+
+		% Fill the 2 visible faces with different shades
+
+		ax ay moveto	bx by lineto	dx dy lineto	closepath
+		ShadeLeft	setgray		fill
+		cx cy moveto	bx by lineto	dx dy lineto	closepath
+		ShadeRight	setgray		fill
+
+		% Draw the 5 visible segments
+
+		0 setgray
+
+		ax ay moveto	bx by lineto	cx cy lineto	dx dy lineto
+		closepath	dx dy moveto	bx by lineto	stroke
+	}
+	ifelse
+} def
+
+/nSide Side neg def
+
+Order
+[Side Side Side] [Side nSide nSide] [nSide nSide Side] [nSide Side nSide]
+pyramid
+
+showpage

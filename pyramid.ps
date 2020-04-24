@@ -25,72 +25,70 @@
 % The xview function has primitive support for perspective. The smaller
 % EyeDistance is, the more perspective distortion is seen.
 
-/Roll 45 def   /Pitch -30 def   /Yaw -15 def
-/PageW 8.5 def   /PageH 11 def
-/Side 0.60 def
-/Order 5 def
+/. {def} def
+/' {exch def} def
 
-/LightPos [4.0 4.0 4.0] def
-/LightBrightness 35 def
-/EyeDistance 3 def
-/EdgeBrightness 0.55 def
+/Roll 45 .     /Pitch -30 .   /Yaw -15 .
+/PageW 8.5 .   /PageH 11 .
+/Side 0.60 .
+/Order 5 .
+
+/LightPos [4.0 4.0 4.0] .
+/LightBrightness 35 .
+/EyeDistance 3 .
+/EdgeBrightness 0.55 .
 
 % Print stack contents bottom to top (for debugging)
 /p {
     count 1 sub -1 0 { index == } for
-} def
+} .
 
 % Vector element-wise binary operation
 /vbinop {				% v1 v2 {op} ==> vr
-    /_op exch def
-    /_v2 exch def
-    /_v1 exch def
+    /_op ' /_v2 ' /_v1 '
     [
 	_v1 0 get _v2 0 get _op exec
 	_v1 1 get _v2 1 get _op exec
 	_v1 2 get _v2 2 get _op exec
     ]
-} def
+} .
 
-/vadd { {add} vbinop } def
-/vsub { {sub} vbinop } def
+/vadd { {add} vbinop } .
+/vsub { {sub} vbinop } .
 
 % Vector divide
 /vdiv {				% v r ==> (v/r)
-    /_r exch def
-    /_v exch def
+    /_r ' /_v '
     [
 	_v 0 get _r div
 	_v 1 get _r div
 	_v 2 get _r div
     ]
-} def
+} .
 
 % Vector 3D dot product
 /vdot {				% v1 v2 ==> vd
-    /_v2 exch def
-    /_v1 exch def
+    /_v2 ' /_v1 '
     _v1 0 get _v2 0 get mul	% (x1*x2)
     _v1 1 get _v2 1 get mul	% (x1*x2) (y1*y2)
     _v1 2 get _v2 2 get mul	% (x1*x2) (y1*y2) (z1*z2)
     add add			% vd
-} def
+} .
 
 % Vector 3D cross product
 /vcross {			% v1 v2 ==> vc
-    /_v2 exch def
-    /_v1 exch def
+    /_v2 ' /_v1 '
     [
 	_v1 1 get _v2 2 get mul _v1 2 get _v2 1 get mul sub	% (y1*z2 - z1*y2)
 	_v1 2 get _v2 0 get mul _v1 0 get _v2 2 get mul sub	% (z1*x2 - x1*z2)
 	_v1 0 get _v2 1 get mul _v1 1 get _v2 0 get mul sub	% (x1*y2 - y1*x2)
     ]
-} def
+} .
 
 % Vector magnitude
 /vmag {				% v ==> r
     aload pop dup mul exch dup mul add exch dup mul add sqrt
-} def
+} .
 
 % Vector 3D rotation around 3 axes with Roll (x), Pitch (y), then Yaw (z).
 %
@@ -107,11 +105,11 @@
 %       [ x (-s(P))   + y c(P) s(R)                    + z c(P) c(R)                    ]
 
 /vrotate {	% v ==> v
-    9 dict begin   aload pop   /z exch def   /y exch def   /x exch def
+    9 dict begin   aload pop   /z '   /y '   /x '
 
-    /cosR Roll  cos def   /sinR Roll  sin def
-    /cosP Pitch cos def   /sinP Pitch sin def
-    /cosY Yaw   cos def   /sinY Yaw   sin def
+    /cosR Roll  cos .   /sinR Roll  sin .
+    /cosP Pitch cos .   /sinP Pitch sin .
+    /cosY Yaw   cos .   /sinY Yaw   sin .
 
     [
 	x cosY mul cosP mul
@@ -127,11 +125,11 @@
 	z cosP mul cosR mul add
     ]
     end
-} def
+} .
 
 % Map a 3D point q to a 2D point p
 /xview {				% q ==> p
-    aload pop /_z exch def /_y exch def /_x exch def
+    aload pop /_z ' /_y ' /_x '
     [
 	% screen x
 	_y   EyeDistance _x sub   div   EyeDistance mul
@@ -143,12 +141,12 @@
 	PageW 2 div mul
 	PageH 2 div add
     ]
-} def
+} .
 
 % Take the midpoint of a line between two points in space
 /qmid {					% q1 q2 ==> (q1 + q2)/2
     vadd 2 vdiv
-} def
+} .
 
 % Average the points of a face to find the center of it, where
 % face is an array of 3D points given in counter-clockwise order.
@@ -157,7 +155,7 @@
     [0 0 0] exch			% 4 [0 0 0] [q1 q2 q3 q4]
     { vadd } forall			% 4 qsum
     exch vdiv				% qavg
-} def
+} .
 
 % Determine a vector perpendicular to a face, where
 % face is an array of 3D points given in counter-clockwise order.
@@ -169,16 +167,16 @@
     vcross				% vp
     dup vmag				% vp r
     vdiv
-} def
+} .
 
 % Point draw functions, where p = [x y]
 /pmoveto {				% p ==> --
     aload pop moveto
-} def
+} .
 
 /plineto {				% p ==> --
     aload pop lineto
-} def
+} .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -198,32 +196,32 @@
 % Create an empty buffer
 /buf_new {					% buf_new ==> buffer
     [ 0 [ null ] ]
-} def
+} .
 
 % Add an item to the end of a buffer, expanding it if necessary.
 /buf_add {					% buffer item buf_add ==>
-    /_item exch def
-    /_buffer exch def
-    /_occupancy _buffer 0 get def
-    /_storage _buffer 1 get def
+    /_item '
+    /_buffer '
+    /_occupancy _buffer 0 get .
+    /_storage _buffer 1 get .
     _storage length _occupancy eq
     {	% If full, double the allocation
 	_storage length 2 mul array		% [x x x x x x x x]
 	dup 0 _storage putinterval		% [a b c d x x x x]
-	/_storage exch def
+	/_storage '
 	_buffer 1 _storage put
     } if
 
     _storage _occupancy _item put
     _buffer 0 _occupancy 1 add put
-} def
+} .
 
 % Convert a buffer to array (no copying required)
 /buf_toarray {					% buffer => array
     aload pop					% 3 [a b c x]
     exch 0 exch					% [a b c x] 0 3
     getinterval					% [a b c]
-} def
+} .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -233,24 +231,19 @@
 /pyramid {	% q1 q2 q3 q4 order ==> --
     12 dict begin
 
-    /order exch def
-
-    /q4 exch def
-    /q3 exch def
-    /q2 exch def
-    /q1 exch def
+    /order ' /q4 ' /q3 ' /q2 ' /q1 '
 
     order 1 gt {
 	% For order > 1, generate pyramid of order - 1
 
-	/q12 q1 q2 qmid def
-	/q13 q1 q3 qmid def
-	/q14 q1 q4 qmid def
-	/q23 q2 q3 qmid def
-	/q24 q2 q4 qmid def
-	/q34 q3 q4 qmid def
+	/q12 q1 q2 qmid .
+	/q13 q1 q3 qmid .
+	/q14 q1 q4 qmid .
+	/q23 q2 q3 qmid .
+	/q24 q2 q4 qmid .
+	/q34 q3 q4 qmid .
 
-	/order order 1 sub def
+	/order order 1 sub .
 
 	q1  q12 q13 q14 order pyramid
 	q12 q2  q23 q24 order pyramid
@@ -265,8 +258,9 @@
 	faces [q3 q4 q2] buf_add		% back
 	faces [q1 q2 q4] buf_add		% bottom
     } ifelse
+
     end
-} def
+} .
 
 % Heap sort
 %
@@ -275,41 +269,40 @@
 
 /heapswap {					% arr i j =>
     3 dict begin
-    /j exch def   /i exch def   /arr exch def
+    /j ' /i ' /arr '
     arr i get
     arr j get
     arr exch i exch put
     arr exch j exch put
     end
-} def
+} .
 
 /heapcompare {					% arr i j comp => (-1 | 0 | 1)
     4 dict begin
     % Note: if I use cmp instead of comp, the result is an infinite loop
-    /comp exch def   /j exch def   /i exch def   /arr exch def
+    /comp ' /j ' /i ' /arr '
     arr i get
     arr j get
     comp
     end
-} def
+} .
 
 /heapsort {					% [] {cmp} => []
     % Heapify by bubbling up elements from end of array toward root
     10 dict begin
+    /cmp ' /arr '
 
-    /cmp exch def
-    /arr exch def
-    /len arr length def
+    /len arr length .
 
     1 1 len 1 sub {
-	/i exch def
-	/c i def
+	/i '
+	/c i .
 	{
-	    /parent c 1 sub 2 idiv def
+	    /parent c 1 sub 2 idiv .
 	    arr c parent {cmp} heapcompare
 	    0 le {exit} if
 	    arr c parent heapswap
-	    /c parent def
+	    /c parent .
 	    c 0 le {exit} if
 	} loop
     } for
@@ -319,59 +312,59 @@
     % heap, and bubbling down the new root.
 
     {
-	/len len 1 sub def
+	/len len 1 sub .
 	len 0 le {exit} if
 
-	/c 0 def
+	/c 0 .
 
 	arr c len heapswap
 
 	{
-	    /l c 2 mul 1 add def
-	    /r c 2 mul 2 add def
+	    /l c 2 mul 1 add .
+	    /r c 2 mul 2 add .
 
 	    l len ge {exit} if
 
 	    r len ge   arr l r {cmp} heapcompare 0 gt   or
-	    { /side l def } { /side r def } ifelse
+	    { /side l . } { /side r . } ifelse
 
 	    arr c side {cmp} heapcompare 0 gt {exit} if
 
 	    arr c side heapswap
-	    /c side def
+	    /c side .
 	} loop
     } loop
 
     end
-} def
+} .
 
-/rp Side def
-/rn rp neg def
+/rp Side .
+/rn rp neg .
 
 /render {
-    /q1 [rp rp rp] vrotate def
-    /q2 [rp rn rn] vrotate def
-    /q3 [rn rn rp] vrotate def
-    /q4 [rn rp rn] vrotate def
+    /q1 [rp rp rp] vrotate .
+    /q2 [rp rn rn] vrotate .
+    /q3 [rn rn rp] vrotate .
+    /q4 [rn rp rn] vrotate .
 
-    /faces buf_new def
+    /faces buf_new .
     q1 q2 q3 q4 Order pyramid
-    /faces faces buf_toarray def
+    /faces faces buf_toarray .
 
     % Sort faces by order of increasing x (back to front)
     faces { fcenter 0 get exch
 	    fcenter 0 get exch sub } heapsort
 
     faces {
-	/face exch def
+	/face '
 
-	/q1 face 0 get def
-	/q2 face 1 get def
-	/q3 face 2 get def
+	/q1 face 0 get .
+	/q2 face 1 get .
+	/q3 face 2 get .
 
-	/p1 q1 xview def
-	/p2 q2 xview def
-	/p3 q3 xview def
+	/p1 q1 xview .
+	/p2 q2 xview .
+	/p3 q3 xview .
 
 	% Determine the shade
 	% XXX Should probably forget the distance thing. There's no shadows
@@ -397,16 +390,16 @@
 	{
 	    % Draw the axes (for debugging)
 	    0 setgray
-	    /p0 [0 0 0] xview def
-	    /px [0.1 0 0] xview def
-	    /py [0 0.2 0] xview def
-	    /pz [0 0 0.3] xview def
+	    /p0 [0 0 0] xview .
+	    /px [0.1 0 0] xview .
+	    /py [0 0.2 0] xview .
+	    /pz [0 0 0.3] xview .
 	    p0 pmoveto   px plineto   stroke
 	    p0 pmoveto   py plineto   stroke
 	    p0 pmoveto   pz plineto   stroke
 	} pop % exec
     } forall
-} def
+} .
 
 72 72 scale
 0.5 72 div setlinewidth

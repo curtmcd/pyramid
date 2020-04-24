@@ -1,8 +1,6 @@
 %!PS-Adobe-2.0
 
-% Pyramidal Fractal in PostScript
-%
-% Draws a 3-D pyramid fractal, as seen in a popular text on Fractals
+% Sierpinski Pyramid Fractal in PostScript
 %
 % Initial version from 1995
 %   Curt.McDowell@andrew.cmu.edu
@@ -12,32 +10,37 @@
 %   Curt McDowell <coder@fishlet.com>
 %
 % Coordinate systems
-%
 %    3D: x goes toward viewer, y goes right, z goes up
 %    2D: x goes right, y goes up
 %
-% User-Adjustable Parameters:
-%
-% Adjust rotation of pyramid by modifying Roll, Pitch and Yaw angles.
+% Adjust rotation by modifying Roll, Pitch and Yaw angles.
 %
 % The outermost pyramid is defined by four points, and is broken into
 % sub-pyramids by connecting midpoints of the six edges.
+%
+% This operates naively by first generating all of the faces, then
+% sorting them from back to front, then drawing them. There is no
+% backface culling or other efficiency. Shadows are not rendered.
+%
+% The xview function has primitive support for perspective. The smaller
+% EyeDistance is, the more perspective distortion is seen.
 
-/Roll 45 def   /Pitch -25 def   /Yaw -10 def
+/Roll 45 def   /Pitch -30 def   /Yaw -15 def
 /PageW 8.5 def   /PageH 11 def
-/Side 0.65 def
-/Order 4 def
+/Side 0.60 def
+/Order 5 def
 
-/LightPos [4.0 -4.0 4.0] def
-/LightBrightness 40 def
-
-/EyePos  [4.0 0.0 0.0] def
+/LightPos [4.0 4.0 4.0] def
+/LightBrightness 35 def
+/EyeDistance 3 def
+/EdgeBrightness 0.55 def
 
 % Print stack contents bottom to top (for debugging)
 /p {
     count 1 sub -1 0 { index == } for
 } def
 
+% Vector element-wise binary operation
 /vbinop {				% v1 v2 {op} ==> vr
     /_op exch def
     /_v2 exch def
@@ -63,7 +66,7 @@
     ]
 } def
 
-% 3D dot product
+% Vector 3D dot product
 /vdot {				% v1 v2 ==> vd
     /_v2 exch def
     /_v1 exch def
@@ -73,7 +76,7 @@
     add add			% vd
 } def
 
-% 3D cross product
+% Vector 3D cross product
 /vcross {			% v1 v2 ==> vc
     /_v2 exch def
     /_v1 exch def
@@ -89,7 +92,7 @@
     aload pop dup mul exch dup mul add exch dup mul add sqrt
 } def
 
-% Rotate a 3D vector around 3 axes with Roll (x), Pitch (y), then Yaw (z).
+% Vector 3D rotation around 3 axes with Roll (x), Pitch (y), then Yaw (z).
 %
 % From Wikipedia "Rotation matrix":
 %
@@ -127,23 +130,23 @@
 } def
 
 % Map a 3D point q to a 2D point p
-/xview {	% q ==> p
+/xview {				% q ==> p
     aload pop /_z exch def /_y exch def /_x exch def
     [
 	% screen x
-	_y
+	_y   EyeDistance _x sub   div   EyeDistance mul
 	PageW 2 div mul
 	PageW 2 div add
 
 	% screen y (assumes PageW is less than or equal to pageH)
-	_z
+	_z   EyeDistance _x sub   div   EyeDistance mul
 	PageW 2 div mul
 	PageH 2 div add
     ]
 } def
 
 % Take the midpoint of a line between two points in space
-/qmid {		% q1 q2 ==> (q1 + q2)/2
+/qmid {					% q1 q2 ==> (q1 + q2)/2
     vadd 2 vdiv
 } def
 
@@ -168,17 +171,18 @@
     vdiv
 } def
 
-/pmoveto {			% p ==> --
+% Point draw functions, where p = [x y]
+/pmoveto {				% p ==> --
     aload pop moveto
 } def
 
-/plineto {			% p ==> --
+/plineto {				% p ==> --
     aload pop lineto
 } def
 
-%%%%% Buffer datatype %%%%%
-
-% A buffer is a expandable array
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Buffer datatype (expandable array)
 %
 % The buffer is stored as an array of two elements, the first being the
 % number of items in the buffer and the second being an array containing
@@ -221,7 +225,7 @@
     getinterval					% [a b c]
 } def
 
-%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Generate the faces of a pyramid
 % Each face is an array of three 3D points [q1 q2 q3]
@@ -264,21 +268,80 @@
     end
 } def
 
-% Bubble sort modified from Don Lancaster's
-/bubblesort {		% array comparison => array
+% Heap sort
+%
+% The user compare function should take two elements "a b" from the stack
+% and return -1 if a < b, 1 if a > b, else 0.
+
+/heapswap {					% arr i j =>
     3 dict begin
-    /comparison exch def
+    /j exch def   /i exch def   /arr exch def
+    arr i get
+    arr j get
+    arr exch i exch put
+    arr exch j exch put
+    end
+} def
+
+/heapcompare {					% arr i j comp => (-1 | 0 | 1)
+    4 dict begin
+    % Note: if I use cmp instead of comp, the result is an infinite loop
+    /comp exch def   /j exch def   /i exch def   /arr exch def
+    arr i get
+    arr j get
+    comp
+    end
+} def
+
+/heapsort {					% [] {cmp} => []
+    % Heapify by bubbling up elements from end of array toward root
+    10 dict begin
+
+    /cmp exch def
     /arr exch def
-    arr length 1 sub -1 1 {
-	arr 0 get exch 1 exch 1 exch {
-	    /posn exch def
-	    arr posn get
-	    2 copy comparison { exch } if
-	    arr exch posn 1 sub exch put
-	} for
-	arr exch posn exch put
+    /len arr length def
+
+    1 1 len 1 sub {
+	/i exch def
+	/c i def
+	{
+	    /parent c 1 sub 2 idiv def
+	    arr c parent {cmp} heapcompare
+	    0 le {exit} if
+	    arr c parent heapswap
+	    /c parent def
+	    c 0 le {exit} if
+	} loop
     } for
-    arr
+
+    % Sort by repeatedly swapping the greatest element (found at the
+    % root) with the last element, excluding the last element from the
+    % heap, and bubbling down the new root.
+
+    {
+	/len len 1 sub def
+	len 0 le {exit} if
+
+	/c 0 def
+
+	arr c len heapswap
+
+	{
+	    /l c 2 mul 1 add def
+	    /r c 2 mul 2 add def
+
+	    l len ge {exit} if
+
+	    r len ge   arr l r {cmp} heapcompare 0 gt   or
+	    { /side l def } { /side r def } ifelse
+
+	    arr c side {cmp} heapcompare 0 gt {exit} if
+
+	    arr c side heapswap
+	    /c side def
+	} loop
+    } loop
+
     end
 } def
 
@@ -296,8 +359,10 @@
     /faces faces buf_toarray def
 
     % Sort faces by order of increasing x (back to front)
-    faces { fcenter 0 get exch fcenter 0 get exch lt } bubblesort
-    {
+    faces { fcenter 0 get exch
+	    fcenter 0 get exch sub } heapsort
+
+    faces {
 	/face exch def
 
 	/q1 face 0 get def
@@ -309,6 +374,8 @@
 	/p3 q3 xview def
 
 	% Determine the shade
+	% XXX Should probably forget the distance thing. There's no shadows
+	% XXX so it doesn't make much sense to try to light it.
 	LightPos face fcenter vsub dup vmag vdiv	% unit vec face center to light
 	face fperp					% unit vec face perpendicular
 	vdot						% cosine of angle between them
@@ -319,33 +386,29 @@
 	dup mul div mul LightBrightness mul		% cosine * brightness / distance^2
 	dup 1 gt {pop 1} if				% clamp between 0 and 1
 	setgray
-	
+
 	% Fill the face
 	p1 pmoveto   p2 plineto   p3 plineto   closepath fill
 
-	% Outline the face in black
-	0 setgray
+	% Outline the face in a darker color
+	EdgeBrightness setgray
 	p1 pmoveto   p2 plineto   p3 plineto   closepath stroke
 
-	% Draw the axes (for debugging)
-%	/p0 [0 0 0] xview def
-%	/px [0.1 0 0] xview def
-%	/py [0 0.2 0] xview def
-%	/pz [0 0 0.3] xview def
-%	p0 pmoveto   px plineto   stroke
-%	p0 pmoveto   py plineto   stroke
-%	p0 pmoveto   pz plineto   stroke
+	{
+	    % Draw the axes (for debugging)
+	    0 setgray
+	    /p0 [0 0 0] xview def
+	    /px [0.1 0 0] xview def
+	    /py [0 0.2 0] xview def
+	    /pz [0 0 0.3] xview def
+	    p0 pmoveto   px plineto   stroke
+	    p0 pmoveto   py plineto   stroke
+	    p0 pmoveto   pz plineto   stroke
+	} pop % exec
     } forall
 } def
 
-%0 10 3600 {
-%    /Yaw exch def
-%    /Pitch exch def
-%    /Roll exch def
-
-    72 72 scale
-    0.5 72 div setlinewidth
-
-    render
-    showpage
-%} for
+72 72 scale
+0.5 72 div setlinewidth
+render
+showpage

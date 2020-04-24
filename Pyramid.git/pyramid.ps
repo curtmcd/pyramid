@@ -1,4 +1,5 @@
-%!
+%!PS-Adobe-2.0
+
 % Pyramidal Fractal in PostScript
 %
 % Draws a 3-D pyramid fractal, as seen in a popular text on Fractals
@@ -10,10 +11,6 @@
 % Updated 2020
 %   Curt McDowell <coder@fishlet.com>
 %
-
-72 72 scale
-0.5 72 div setlinewidth
-
 % Coordinate systems
 %
 %    3D: x goes toward viewer, y goes right, z goes up
@@ -32,6 +29,35 @@
 /Side 0.65 def
 /Order 5 def
 
+/LightPos [1.0 1.0 1.0] def
+/ViewPos  [2.0 0.0 0.0] def
+
+% 3D dot product
+/dot {				% q q ==> d
+    				% [x1 y1 z1] [x2 y2 z2]
+    1 index 0 get 		% [x1 y1 z1] [x2 y2 z2] x1
+    1 index 0 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2)
+    2 index 1 get		% [x1 y1 z1] [x2 y2 z2] (x1*x2) y1
+    2 index 1 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2)
+    3 index 2 get		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2) z1
+    3 index 2 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2) (z1*z2)
+    add add			% [x1 y1 z1] [x2 y2 z2] d
+    exch pop exch pop
+} def
+
+% 3D cross product
+/cross {			% q q ==> q
+    				% [x1 y1 z1] [x2 y2 z2]
+    1 index 1 get 1 index 2 get mul 2 index 2 get 2 index 1 get mul sub
+    2 index 2 get 2 index 0 get mul 3 index 0 get 3 index 2 get mul sub
+    3 index 0 get 3 index 1 get mul 4 index 1 get 4 index 0 get mul sub
+    				% [x1 y1 z1] [x2 y2 z2] px py pz
+    3 array astore
+    exch pop exch pop		% [(y1*z2 - z1*y2) (z1*x2 - x1*z2) (x1*y2 - y1*x2)]
+} def
+
+% 3D dot product
+
 % Rotate a 3D point around 3 axes with Roll (x), Pitch (y), then Yaw (z).
 %
 % From Wikipedia "Rotation matrix":
@@ -46,12 +72,13 @@
 %  qR = | x s(Y) c(P) + y (s(Y) s(P) s(R) + c(Y) c(R)) + z (s(Y) s(P) c(R) - c(Y) s(R)) |
 %       [ x (-s(P))   + y c(P) s(R)                    + z c(P) c(R)                    ]
 
-/cosR Roll  cos def   /sinR Roll  sin def
-/cosP Pitch cos def   /sinP Pitch sin def
-/cosY Yaw   cos def   /sinY Yaw   sin def
-
 /xrotate {	% q ==> q
-    3 dict begin   aload pop   /z exch def   /y exch def   /x exch def
+    9 dict begin   aload pop   /z exch def   /y exch def   /x exch def
+
+    /cosR Roll  cos def   /sinR Roll  sin def
+    /cosP Pitch cos def   /sinP Pitch sin def
+    /cosY Yaw   cos def   /sinY Yaw   sin def
+
     [
 	x cosY mul cosP mul
 	y cosY sinP mul sinR mul sinY cosR mul sub mul add
@@ -105,75 +132,80 @@
 } def
 
 % Print stack contents bottom to top (for debugging)
-/p
-{			% [ (a) (b) (c) ] [ (a) (b) (c) ]
-    [ count 1 roll ] dup { == } forall aload pop
+/p {
+    count 1 sub -1 0 { index == } for
 } def
-
-% XXX
-/array_concat
-{
-    exch 2 copy length exch length add array
-    dup dup 5 2 roll copy length exch putinterval
-} bind def
 
 %%%%% Buffer datatype %%%%%
 
+% A buffer is a expandable array
+%
+% The buffer is stored as an array of two elements, the first being the
+% number of items in the buffer and the second being an array containing
+% the items, where the array may be large than the number of items.
+% This allows adding one item at a time with a reasonably small amount of copying.
+%
+% Example if a buffer has sufficient capacity for a new item
+%   [3 [a b c x]] e ==> [3 [a b c e]]
+%
+% When a buffer is full, it gets copied and its capacity is doubled
+%   [4 [a b c d]] e ==> [5 [a b c d e x x x]]
+
 % Create an empty buffer
-/buf_new {
-    [ 0 null ]
+/buf_new {			% buf_new ==> buffer
+    [ 0 [ null ] ]
 } def
 
-% Add an element to the end of the buffer, expanding it if necessary
-/buf_add	% First element of array is the number of elements used
-		% [3 a b c x x x] e ==> [3 a b c e x x]
-		% Array length is doubled if full
-		% [4 a b c d] e ==> [8 a b c d e x x x x]
-{
-    					% [3 a b c x] e
-    exch				% e [3 a b c x]
-    dup 0 get 1 add exch		% e 4 [3 a b c x]	% insert pos = 4
-    dup 0 get exch			% e 4 3 [3 a b c x]	% current occupancy = 3
-    dup length 1 sub			% e 4 3 [3 a b c x] 4	% capacity = 4
-    3 2 roll				% e 4 [3 a b c x] 4 3
-    eq					% e 4 [3 a b c x] bool	% true if full
+% Add an item to the end of the buffer, expanding it if necessary.
+
+/buf_add {			% buffer item buf_add ==>
+    				% [3 [a b c x]] e
+    1 index aload pop length	% [3 [a b c x]] e 3 4	% occupancy=3, capacity=4
+    eq				% [3 [a b c x]] e bool
     {
-	% Double the allocation
-					% e 5 [4 a b c d]
-	dup 0 get 2 mul			% e 5 [4 a b c d] 8    % new capacity = 8
-	1 add array			% e 5 [4 a b c d] [x x x x x x x x x]
-	dup 3 2 roll 			% e 5 [x x x x x x x x x] [x x x x x x x x x] [4 a b c d]
-	0 exch putinterval		% e 5 [4 a b c d x x x x]
+	% If full, double the allocation
+				% [4 [a b c d]] e
+	1 index aload pop	% [4 [a b c d]] e 4 [a b c d]
+	exch 2 mul array	% [4 [a b c d]] e [a b c d] [x x x x x x x x]
+	dup 0			% [4 [a b c d]] e [a b c d] [x x x x x x x x] [x x x x x x x x] 0
+	4 3 roll		% [4 [a b c d]] e [x x x x x x x x] [x x x x x x x x] 0 [a b c d]
+	putinterval		% [4 [a b c d]] e [a b c d x x x x]
+
+	2 index 1		% [4 [a b c d]] e [a b c d x x x x] [4 [a b c d]] 1
+	3 2 roll		% [4 [a b c d]] e [4 [a b c d]] 1 [a b c d x x x x]
+	put			% [4 [a b c d x x x x]] e
     } if
-    % Write to insert position
-    					% e 4 [3 a b c x]
-    dup					% e 4 [3 a b c x] [3 a b c x]
-    4 1 roll				% [3 a b c x] e 4 [3 a b c x]
-    3 1 roll				% [3 a b c x] [3 a b c x] e 4
-    exch put				% [3 a b c e]
-    % Increment occupancy
-    dup 0 get 1 add			% [3 a b c e] 4
-    exch dup 0				% 4 [3 a b c e] [3 a b c e] 0
-    4 3 roll				% [3 a b c e] [3 a b c e] 0 4
-    put					% [4 a b c e]
+
+    % Write item at insert position
+    1 index 0 get		% [3 [a b c x]] e 3
+    dup 1 add exch		% [3 [a b c x]] e 4 3
+    3 index 1 get		% [3 [a b c x]] e 4 3 [a b c x]
+    exch			% [3 [a b c x]] e 4 [a b c x] 3
+    4 3 roll			% [3 [a b c x]] 4 [a b c x] 3 e
+    put				% [3 [a b c e]] 4
+    0 exch			% [3 [a b c e]] 0 4
+    put				% --
 } def
 
-% Iterate proc over buffer items, without copying buffer
-/buf_forall	% [3 a b c x] {proc} =>
-{
-    exch				% {proc} [3 a b c x]
-    dup 0 get				% {proc} [3 a b c x] 3
-    1 exch 1 exch			% {proc} [3 a b c x] 1 1 3
-    {
-					% {proc} [3 a b c x] 1
-	exch dup			% {proc} 1 [3 a b c x] [3 a b c x]
-	3 2 roll			% {proc} [3 a b c x] [3 a b c x] 1
-	get				% {proc} [3 a b c x] a
-	2 index				% {proc} [3 a b c x] a {proc}
-	exec				% {proc} [3 a b c x]
-    } for
-    pop pop
+% Convert a buffer to array (no copying required)
+/buf_toarray {			% buffer => array
+    				% [3 [a b c x]]
+    aload pop			% 3 [a b c x]
+    0				% 3 [a b c x] 0
+    3 2 roll			% [a b c x] 0 3
+    getinterval			% [a b c]
 } def
+
+%%%%
+
+% Print stack contents bottom to top (for debugging)
+/p
+{
+    [ count 1 roll ] dup { == } forall aload pop
+} def
+
+% Generate the faces of a pyramid
+% Each face is an array of three 3D points [q1 q2 q3]
 
 /pyramid {	% q1 q2 q3 q4 order ==> --
     12 dict begin
@@ -202,83 +234,98 @@
 	q14 q24 q34 q4  order pyramid
 	q13 q23 q3  q34 order pyramid
     } {
-	% For order = 1, draw pyramid
+	% For order = 1, generate faces
+	% As counter-clockwise polygons
 
-	/p1 q1 xview def  % bottom front
-	/p2 q2 xview def  % bottom left
-	/p3 q3 xview def  % top
-	/p4 q4 xview def  % bottom right
-
-	% Fill the two visible faces with different shades
-
-	ShadeLeft setgray
-	p2 pmoveto   p1 plineto   p3 plineto   closepath fill
-
-	ShadeRight setgray
-	p4 pmoveto   p1 plineto   p3 plineto   closepath fill
-
-	% Draw the five visible line segments
-
-	0 setgray
-	p2 pmoveto   p1 plineto   p4 plineto   p3 plineto
-	closepath    p3 pmoveto   p1 plineto   stroke
+	faces [q2 q1 q3] buf_add		% front left
+	faces [q1 q4 q3] buf_add		% front right
+	faces [q3 q4 q2] buf_add		% back
+	faces [q1 q2 q4] buf_add		% bottom
     } ifelse
+    end
+} def
+
+% Average three points of a face to find the center of it
+/center {
+    3 dict begin   aload pop   /p1 exch def   /p2 exch def   /p3 exch def
+    [
+	p1 0 get p2 0 get p3 0 get add add 3 div
+	p1 1 get p2 1 get p3 1 get add add 3 div
+	p1 2 get p2 2 get p3 2 get add add 3 div
+    ]
+    end
+} def
+
+% Bubble sort modified from Don Lancaster's
+/bubblesort {		% array comparison => array
+    3 dict begin
+    /comparison exch def
+    /arr exch def
+    arr length 1 sub -1 1 {
+	arr 0 get exch 1 exch 1 exch {
+	    /posn exch def
+	    arr posn get
+	    2 copy comparison { exch } if
+	    arr exch posn 1 sub exch put
+	} for
+	arr exch posn exch put
+    } for
+    arr
     end
 } def
 
 /rp Side def
 /rn rp neg def
 
-/q1 [rp rp rp] xrotate def
-/q2 [rp rn rn] xrotate def
-/q3 [rn rn rp] xrotate def
-/q4 [rn rp rn] xrotate def
+/render {
+    /q1 [rp rp rp] xrotate def
+    /q2 [rp rn rn] xrotate def
+    /q3 [rn rn rp] xrotate def
+    /q4 [rn rp rn] xrotate def
 
-q1 q2 q3 q4 Order pyramid
+    /faces buf_new def
+    q1 q2 q3 q4 Order pyramid
+    /faces faces buf_toarray def
 
-% The next step will be to calculate the order in which faces are
-% drawn
+    % Sort faces by order of increasing x (back to front)
+    faces { center 0 get exch center 0 get exch lt } bubblesort
+    {
+	/face exch def
 
-% Pyramid faces (counter-clockwise)
-%/faces [
-%    [q1 q2 q4] def
-%    [q1 q3 q2] def
-%    [q1 q4 q3] def
-%    [q2 q3 q4] def
-%] def
-%
-%% Average three points of a face to find the center of it
-%/center {
-%    3 dict begin   aload pop   /p1 exch def   /p2 exch def   /p3 exch def
-%    [
-%	p1 0 get p2 0 get p3 0 get add add 3 div
-%	p1 1 get p2 1 get p3 1 get add add 3 div
-%	p1 2 get p2 2 get p3 2 get add add 3 div
-%    ]
-%    end
-%} def
-%
-%% Bubble sort modified from Don Lancaster's
-%/bubblesort {		% array comparison => array
-%    3 dict begin
-%    /comparison exch def
-%    /arr exch def
-%    arr length 1 sub -1 1 {
-%	arr 0 get exch 1 exch 1 exch {
-%	    /posn exch def
-%	    arr posn get
-%	    2 copy comparison { exch } if
-%	    arr exch posn 1 sub exch put
-%	} for
-%	arr exch posn exch put
-%    } for
-%    arr
-%    end
-%} def
-%
-%% Sort faces by order of increasing x (back to front)
-%faces { center 0 get exch center 0 get exch lt } bubblesort
-%
-%Order faces pyramid
+	/q1 face 0 get def
+	/q2 face 1 get def
+	/q3 face 2 get def
 
-showpage
+	/p1 q1 xview def
+	/p2 q2 xview def
+	/p3 q3 xview def
+
+	% Fill the face
+
+	ShadeLeft setgray
+	p1 pmoveto   p2 plineto   p3 plineto   closepath fill
+
+	%ShadeLeft setgray
+	%p2 pmoveto   p1 plineto   p3 plineto   closepath fill
+
+	%ShadeRight setgray
+	%p4 pmoveto   p1 plineto   p3 plineto   closepath fill
+
+	% Outline the face
+
+	0 setgray
+	p1 pmoveto   p2 plineto   p3 plineto   closepath stroke
+    } forall
+} def
+
+0 10 3600 {
+    /Yaw exch def
+%    /Pitch exch def
+%    /Roll exch def
+
+    72 72 scale
+    0.5 72 div setlinewidth
+
+    render
+    showpage
+} for

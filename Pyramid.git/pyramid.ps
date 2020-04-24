@@ -90,7 +90,7 @@
 } def
 
 % Take the midpoint of a line between two 3D points
-/mid {		% q1 q2 ==> (q1 + q2) / 2
+/qmid {		% q1 q2 ==> (q1 + q2) / 2
     2 dict begin   /q2 exch def   /q1 exch def
     [
         q1 0 get   q2 0 get   add   2 div
@@ -116,12 +116,12 @@
 } def
 
 /pyramid_sub {
-    /q12 q1 q2 mid def
-    /q13 q1 q3 mid def
-    /q14 q1 q4 mid def
-    /q23 q2 q3 mid def
-    /q24 q2 q4 mid def
-    /q34 q3 q4 mid def
+    /q12 q1 q2 qmid def
+    /q13 q1 q3 qmid def
+    /q14 q1 q4 qmid def
+    /q23 q2 q3 qmid def
+    /q24 q2 q4 qmid def
+    /q34 q3 q4 qmid def
 
     /order' order 1 sub def
 
@@ -155,11 +155,61 @@
 /rp Side def
 /rn rp neg def
 
-Order
-[rp rp rp] xrotate
-[rp rn rn] xrotate
-[rn rn rp] xrotate
-[rn rp rn] xrotate
-pyramid
+/q1 [rp rp rp] xrotate def
+/q2 [rp rn rn] xrotate def
+/q3 [rn rn rp] xrotate def
+/q4 [rn rp rn] xrotate def
+
+% The next step will be to calculate the order in which faces are
+% drawn
+
+% Pyramid faces (counter-clockwise)
+/faces [
+    [q1 q2 q4] def
+    [q1 q3 q2] def
+    [q1 q4 q3] def
+    [q2 q3 q4] def
+] def
+
+% Average three points of a face to find the center of it
+/center {
+    3 dict begin   aload pop   /p1 exch def   /p2 exch def   /p3 exch def
+    [
+	p1 0 get p2 0 get p3 0 get add add 3 div
+	p1 1 get p2 1 get p3 1 get add add 3 div
+	p1 2 get p2 2 get p3 2 get add add 3 div
+    ]
+    end
+} def
+
+% Face center points
+/centers [
+    faces 0 get center
+    faces 1 get center
+    faces 2 get center
+    faces 3 get center
+] def
+
+% Bubble sort modified from Don Lancaster's
+/bubblesort {		% array comparison => array
+    3 dict begin
+    /comparison exch def
+    /arr exch def
+    arr length 1 sub -1 1 {
+	arr 0 get exch 1 exch 1 exch {
+	    /posn exch def
+	    arr posn get
+	    2 copy comparison { exch } if
+	    arr exch posn 1 sub exch put
+	} for
+	arr exch posn exch put
+    } for
+    arr
+    end
+} def
+
+% Sort faces by order of increasing x (back to front)
+
+Order q1 q2 q3 q4 pyramid
 
 showpage

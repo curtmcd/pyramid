@@ -23,17 +23,45 @@
 % The outermost pyramid is defined by four points, and is broken into
 % sub-pyramids by connecting midpoints of the six edges.
 
-/Roll 0 def   /Pitch 10 def   /Yaw 0 def
-/ShadeLeft 0.95 def   /ShadeRight 0.5 def
+/Roll 45 def   /Pitch -25 def   /Yaw -10 def
 /PageW 8.5 def   /PageH 11 def
 /Side 0.65 def
-/Order 5 def
+/Order 4 def
 
-/LightPos [1.0 1.0 1.0] def
-/ViewPos  [2.0 0.0 0.0] def
+/LightPos [4.0 -4.0 4.0] def
+/LightBrightness 40 def
+
+/EyePos  [4.0 0.0 0.0] def
+
+% Print stack contents bottom to top (for debugging)
+/p {
+    count 1 sub -1 0 { index == } for
+} def
+
+/vbinop {				% v1 v2 {op} ==> vr
+    [
+	3 index 0 get 3 index 0 get 3 index exec
+	4 index 1 get 4 index 1 get 4 index exec
+	5 index 2 get 5 index 2 get 5 index exec
+    ]
+    exch pop exch pop exch pop
+} def
+
+/vadd { {add} vbinop } def
+/vsub { {sub} vbinop } def
+
+% Vector divide
+/vdiv {				% v r ==> (v/r)
+    [
+	2 index 0 get 2 index div
+	3 index 1 get 3 index div
+	4 index 2 get 4 index div
+    ]
+    exch pop exch pop
+} def
 
 % 3D dot product
-/dot {				% q q ==> d
+/vdot {				% v1 v2 ==> vd
     				% [x1 y1 z1] [x2 y2 z2]
     1 index 0 get 		% [x1 y1 z1] [x2 y2 z2] x1
     1 index 0 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2)
@@ -41,24 +69,28 @@
     2 index 1 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2)
     3 index 2 get		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2) z1
     3 index 2 get mul		% [x1 y1 z1] [x2 y2 z2] (x1*x2) (y1*y2) (z1*z2)
-    add add			% [x1 y1 z1] [x2 y2 z2] d
-    exch pop exch pop
+    add add			% [x1 y1 z1] [x2 y2 z2] vd
+    exch pop exch pop		% vd
 } def
 
 % 3D cross product
-/cross {			% q q ==> q
-    				% [x1 y1 z1] [x2 y2 z2]
-    1 index 1 get 1 index 2 get mul 2 index 2 get 2 index 1 get mul sub
-    2 index 2 get 2 index 0 get mul 3 index 0 get 3 index 2 get mul sub
-    3 index 0 get 3 index 1 get mul 4 index 1 get 4 index 0 get mul sub
-    				% [x1 y1 z1] [x2 y2 z2] px py pz
-    3 array astore
+/vcross {			% v1 v2 ==> vc
+    [
+    				% [x1 y1 z1] [x2 y2 z2] [
+    2 index 1 get 2 index 2 get mul 3 index 2 get 3 index 1 get mul sub
+    3 index 2 get 3 index 0 get mul 4 index 0 get 4 index 2 get mul sub
+    4 index 0 get 4 index 1 get mul 5 index 1 get 5 index 0 get mul sub
+    				% [x1 y1 z1] [x2 y2 z2] [ dx dy dz
+    ]
     exch pop exch pop		% [(y1*z2 - z1*y2) (z1*x2 - x1*z2) (x1*y2 - y1*x2)]
 } def
 
-% 3D dot product
+% Vector magnitude
+/vmag {				% v ==> r
+    aload pop dup mul exch dup mul add exch dup mul add sqrt
+} def
 
-% Rotate a 3D point around 3 axes with Roll (x), Pitch (y), then Yaw (z).
+% Rotate a 3D vector around 3 axes with Roll (x), Pitch (y), then Yaw (z).
 %
 % From Wikipedia "Rotation matrix":
 %
@@ -69,10 +101,10 @@
 %       [ 0      0     1 ] [ -s(P)  0  c(P) ] [ 0  s(R)   c(R) ]
 %
 %       [ x c(Y) c(P) + y (c(Y) s(P) s(R) - s(Y) c(R)) + z (c(Y) s(P) c(R) + s(Y) s(R)) ]
-%  qR = | x s(Y) c(P) + y (s(Y) s(P) s(R) + c(Y) c(R)) + z (s(Y) s(P) c(R) - c(Y) s(R)) |
+%  vR = | x s(Y) c(P) + y (s(Y) s(P) s(R) + c(Y) c(R)) + z (s(Y) s(P) c(R) - c(Y) s(R)) |
 %       [ x (-s(P))   + y c(P) s(R)                    + z c(P) c(R)                    ]
 
-/xrotate {	% q ==> q
+/vrotate {	% v ==> v
     9 dict begin   aload pop   /z exch def   /y exch def   /x exch def
 
     /cosR Roll  cos def   /sinR Roll  sin def
@@ -112,28 +144,38 @@
     end
 } def
 
-% Take the midpoint of a line between two 3D points
-/qmid {		% q1 q2 ==> (q1 + q2) / 2
-    2 dict begin   /q2 exch def   /q1 exch def
-    [
-        q1 0 get   q2 0 get   add   2 div
-        q1 1 get   q2 1 get   add   2 div
-        q1 2 get   q2 2 get   add   2 div
-    ]
-    end
+% Take the midpoint of a line between two points in space
+/qmid {		% q1 q2 ==> (q1 + q2)/2
+    vadd 2 vdiv
 } def
 
-/pmoveto {	% p ==> --
+% Average the points of a face to find the center of it, where
+% face is an array of 3D points given in counter-clockwise order.
+/fcenter {				% [q1 q2 q3 ...] ==> qavg
+    dup length exch			% 4 [q1 q2 q3 q4]
+    [0 0 0] exch			% 4 [0 0 0] [q1 q2 q3 q4]
+    { vadd } forall			% 4 qsum
+    exch vdiv				% qavg
+} def
+
+% Determine a vector perpendicular to a face, where
+% face is an array of 3D points given in counter-clockwise order.
+/fperp {				% [q1 q2 q3 ...] ==> vp
+    dup 0 2 getinterval aload pop   	% [q1 q2 q3 ...] q1 q2
+    vsub exch				% (q1-q2) [q1 q2 q3 ...]
+    1 2 getinterval aload pop   	% (q1-q2) q2 q3
+    vsub				% (q1-q2) (q2-q3)
+    vcross				% vp
+    dup vmag				% vp r
+    vdiv
+} def
+
+/pmoveto {			% p ==> --
     aload pop moveto
 } def
 
-/plineto {	% p ==> --
+/plineto {			% p ==> --
     aload pop lineto
-} def
-
-% Print stack contents bottom to top (for debugging)
-/p {
-    count 1 sub -1 0 { index == } for
 } def
 
 %%%%% Buffer datatype %%%%%
@@ -156,8 +198,7 @@
     [ 0 [ null ] ]
 } def
 
-% Add an item to the end of the buffer, expanding it if necessary.
-
+% Add an item to the end of a buffer, expanding it if necessary.
 /buf_add {			% buffer item buf_add ==>
     				% [3 [a b c x]] e
     1 index aload pop length	% [3 [a b c x]] e 3 4	% occupancy=3, capacity=4
@@ -191,18 +232,11 @@
 /buf_toarray {			% buffer => array
     				% [3 [a b c x]]
     aload pop			% 3 [a b c x]
-    0				% 3 [a b c x] 0
-    3 2 roll			% [a b c x] 0 3
+    exch 0 exch			% [a b c x] 0 3
     getinterval			% [a b c]
 } def
 
 %%%%
-
-% Print stack contents bottom to top (for debugging)
-/p
-{
-    [ count 1 roll ] dup { == } forall aload pop
-} def
 
 % Generate the faces of a pyramid
 % Each face is an array of three 3D points [q1 q2 q3]
@@ -245,17 +279,6 @@
     end
 } def
 
-% Average three points of a face to find the center of it
-/center {
-    3 dict begin   aload pop   /p1 exch def   /p2 exch def   /p3 exch def
-    [
-	p1 0 get p2 0 get p3 0 get add add 3 div
-	p1 1 get p2 1 get p3 1 get add add 3 div
-	p1 2 get p2 2 get p3 2 get add add 3 div
-    ]
-    end
-} def
-
 % Bubble sort modified from Don Lancaster's
 /bubblesort {		% array comparison => array
     3 dict begin
@@ -278,17 +301,17 @@
 /rn rp neg def
 
 /render {
-    /q1 [rp rp rp] xrotate def
-    /q2 [rp rn rn] xrotate def
-    /q3 [rn rn rp] xrotate def
-    /q4 [rn rp rn] xrotate def
+    /q1 [rp rp rp] vrotate def
+    /q2 [rp rn rn] vrotate def
+    /q3 [rn rn rp] vrotate def
+    /q4 [rn rp rn] vrotate def
 
     /faces buf_new def
     q1 q2 q3 q4 Order pyramid
     /faces faces buf_toarray def
 
     % Sort faces by order of increasing x (back to front)
-    faces { center 0 get exch center 0 get exch lt } bubblesort
+    faces { fcenter 0 get exch fcenter 0 get exch lt } bubblesort
     {
 	/face exch def
 
@@ -300,26 +323,38 @@
 	/p2 q2 xview def
 	/p3 q3 xview def
 
+	% Determine the shade
+	LightPos face fcenter vsub dup vmag vdiv	% unit vec face center to light
+	face fperp					% unit vec face perpendicular
+	vdot						% cosine of angle between them
+	1 add 2 div					% range (-1, 1) ==> (0, 1)
+	1
+	LightPos face fcenter vsub vmag			% distance face center to light
+	0.1 add						% just to make sure it's not zero
+	dup mul div mul LightBrightness mul		% cosine * brightness / distance^2
+	dup 1 gt {pop 1} if				% clamp between 0 and 1
+	setgray
+	
 	% Fill the face
-
-	ShadeLeft setgray
 	p1 pmoveto   p2 plineto   p3 plineto   closepath fill
 
-	%ShadeLeft setgray
-	%p2 pmoveto   p1 plineto   p3 plineto   closepath fill
-
-	%ShadeRight setgray
-	%p4 pmoveto   p1 plineto   p3 plineto   closepath fill
-
-	% Outline the face
-
+	% Outline the face in black
 	0 setgray
 	p1 pmoveto   p2 plineto   p3 plineto   closepath stroke
+
+	% Draw the axes (for debugging)
+%	/p0 [0 0 0] xview def
+%	/px [0.1 0 0] xview def
+%	/py [0 0.2 0] xview def
+%	/pz [0 0 0.3] xview def
+%	p0 pmoveto   px plineto   stroke
+%	p0 pmoveto   py plineto   stroke
+%	p0 pmoveto   pz plineto   stroke
     } forall
 } def
 
 0 10 3600 {
-    /Yaw exch def
+%    /Yaw exch def
 %    /Pitch exch def
 %    /Roll exch def
 

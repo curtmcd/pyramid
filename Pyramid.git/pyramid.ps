@@ -18,6 +18,9 @@
 % It is then rotated around the Z axis by alpha
 % (front corner moving right), then around the Y (horizonal)
 % axis by beta (top corner moving down).
+%
+% The pyramid is defined by four points, and is broken into
+% sub-pyramids by connecting the midpoints of the six edges.
 
 /Alpha		50    def	/Beta		65    def
 /ShadeLeft	0.95  def	/ShadeRight	0.5   def
@@ -29,77 +32,80 @@
 /sina Alpha sin def	/sinb Beta sin def
 /cosa Alpha cos def	/cosb Beta cos def
 
-% Transformation from 3-D coordinates to 2-D
+% Transform a 3D point q into a 2D point p
+/xform {	% q ==> p
+    3 dict begin   aload pop   /z exch def   /y exch def   /x exch def
+    [
+	% x'
+	y cosa mul x sina mul sub
+	PageW 2 div mul
+	PageW 2 div add
 
-/xform {	% q0 ==> x' y'
-    /q0 exch def
-
-    q0 1 get cosa mul q0 0 get sina mul sub
-    PageW 2 div mul		% Compute X and
-    PageW 2 div add		% leave on stack
-
-    q0 0 get sinb mul cosa mul q0 1 get sina mul sinb mul
-    add q0 2 get cosb mul add
-    PageW 2 div mul		% Compute Y and
-    PageH 2 div add		% leave on stack
+	% y'
+	x sinb mul cosa mul y sina mul sinb mul add z cosb mul add
+	PageW 2 div mul
+	PageH 2 div add
+    ]
+    end
 } def
 
-/coord {	% pt ==> x y
-    dup 0 get swap 1 get
-}
-
-% The pyramid is defined by four points, and is broken into
-% sub-pyramids by connecting the midpoints of the six edges.
-
+% Take the midpoint of a line between two 3D points
 /mid {		% q1 q2 ==> (q1 + q2) / 2
-    /q2 exch def /q1 exch def
-    q1 0 get q2 0 get add 2 div
-    q1 1 get q2 1 get add 2 div
-    q1 2 get q2 2 get add 2 div
-    3 array astore
+    2 dict begin   /q2 exch def   /q1 exch def
+    [
+        q1 0 get   q2 0 get   add   2 div
+        q1 1 get   q2 1 get   add   2 div
+        q1 2 get   q2 2 get   add   2 div
+    ]
+    end
 } def
 
-/pyramid {	% order p1 p2 p3 p4 ==> --
+% Expand a point
+/coord {	% p ==> x y
+    aload pop
+} def
+
+/pyramid {	% order q1 q2 q3 q4 ==> --
     12 dict begin
 
-    /p4 exch def /p3 exch def /p2 exch def /p1 exch def /order exch def
+    /q4 exch def /q3 exch def /q2 exch def /q1 exch def /order exch def
 
     % Generate the sub-pyramids if order > 1, else draw order 1 pyramid
     order 1 gt
     {
-	/p12 p1 p2 mid def
-	/p13 p1 p3 mid def
-	/p14 p1 p4 mid def
-	/p23 p2 p3 mid def
-	/p24 p2 p4 mid def
-	/p34 p3 p4 mid def
+	/q12 q1 q2 mid def
+	/q13 q1 q3 mid def
+	/q14 q1 q4 mid def
+	/q23 q2 q3 mid def
+	/q24 q2 q4 mid def
+	/q34 q3 q4 mid def
 
 	/order' order 1 sub def
 
-	order' p1  p12 p13 p14 pyramid
-	order' p12 p2  p23 p24 pyramid
-	order' p14 p24 p34 p4  pyramid
-	order' p13 p23 p3  p34 pyramid
+	order' q1  q12 q13 q14 pyramid
+	order' q12 q2  q23 q24 pyramid
+	order' q14 q24 q34 q4  pyramid
+	order' q13 q23 q3  q34 pyramid
     }
     {
-	p2 xform /ay exch def /ax exch def   % p2 (ax, ay) = left bottom
-	p1 xform /by exch def /bx exch def   % p1 (bx, by) = bottom front
-	p4 xform /cy exch def /cx exch def   % p4 (cx, cy) = right bottom
-	p3 xform /dy exch def /dx exch def   % p3 (dx, dy) = top
+	/p1 q1 xform def  % bottom front
+	/p2 q2 xform def  % bottom left
+	/p3 q3 xform def  % top
+	/p4 q4 xform def  % bottom right
 
 	% Fill the two visible faces with different shades
 
 	ShadeLeft setgray
-	ax ay moveto   bx by lineto   dx dy lineto   closepath fill
+	p2 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
 
 	ShadeRight setgray
-	cx cy moveto   bx by lineto   dx dy lineto   closepath fill
+	p4 coord moveto   p1 coord lineto   p3 coord lineto   closepath fill
 
 	% Draw the five visible line segments
 
 	0 setgray
-	ax ay moveto   bx by lineto   cx cy lineto   dx dy lineto   closepath
-	dx dy moveto   bx by lineto   stroke
+	p2 coord moveto   p1 coord lineto   p4 coord lineto   p3 coord lineto
+	closepath         p3 coord moveto   p1 coord lineto   stroke
     }
     ifelse
 

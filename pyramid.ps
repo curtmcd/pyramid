@@ -25,8 +25,8 @@
 % The xview function has primitive support for perspective. The smaller
 % EyeDistance is, the more perspective distortion is seen.
 
-/. {def} def
-/' {exch def} def
+/. {def} def /^ {exch} def /? {get} def /! {put} def
+/+ {add} def /- {sub} def /* {mul} def
 
 /Roll 45 .     /Pitch -30 .   /Yaw -15 .
 /PageW 8.5 .   /PageH 11 .
@@ -40,54 +40,61 @@
 
 % Print stack contents bottom to top (for debugging)
 /p {
-    count 1 sub -1 0 { index == } for
+    count 1 - -1 0 { index == } for
+} .
+
+/args {
+    12 dict begin {^ .} forall
 } .
 
 % Vector element-wise binary operation
 /vbinop {				% v1 v2 {op} ==> vr
-    /_op ' /_v2 ' /_v1 '
+    [/op /v2 /v1] args
     [
-	_v1 0 get _v2 0 get _op exec
-	_v1 1 get _v2 1 get _op exec
-	_v1 2 get _v2 2 get _op exec
+	v1 0 ? v2 0 ? op exec
+	v1 1 ? v2 1 ? op exec
+	v1 2 ? v2 2 ? op exec
     ]
+    end
 } .
 
-/vadd { {add} vbinop } .
-/vsub { {sub} vbinop } .
+/vadd { {+} vbinop } .
+/vsub { {-} vbinop } .
 
 % Vector divide
-/vdiv {				% v r ==> (v/r)
-    /_r ' /_v '
+/vdiv {					% v r ==> (v/r)
+    [/r /v] args
     [
-	_v 0 get _r div
-	_v 1 get _r div
-	_v 2 get _r div
+	v 0 ? r div
+	v 1 ? r div
+	v 2 ? r div
     ]
+    end
 } .
 
 % Vector 3D dot product
-/vdot {				% v1 v2 ==> vd
-    /_v2 ' /_v1 '
-    _v1 0 get _v2 0 get mul	% (x1*x2)
-    _v1 1 get _v2 1 get mul	% (x1*x2) (y1*y2)
-    _v1 2 get _v2 2 get mul	% (x1*x2) (y1*y2) (z1*z2)
-    add add			% vd
+/vdot {					% v1 v2 ==> vd
+    [/v2 /v1] args
+    v1 0 ? v2 0 ? *			% (x1*x2)
+    v1 1 ? v2 1 ? * +			% ((x1*x2)+(y1*y2))
+    v1 2 ? v2 2 ? * +			% vd
+    end
 } .
 
 % Vector 3D cross product
-/vcross {			% v1 v2 ==> vc
-    /_v2 ' /_v1 '
+/vcross {				% v1 v2 ==> vc
+    [/v2 /v1] args
     [
-	_v1 1 get _v2 2 get mul _v1 2 get _v2 1 get mul sub	% (y1*z2 - z1*y2)
-	_v1 2 get _v2 0 get mul _v1 0 get _v2 2 get mul sub	% (z1*x2 - x1*z2)
-	_v1 0 get _v2 1 get mul _v1 1 get _v2 0 get mul sub	% (x1*y2 - y1*x2)
+	v1 1 ? v2 2 ? * v1 2 ? v2 1 ? * -	% (y1*z2 - z1*y2)
+	v1 2 ? v2 0 ? * v1 0 ? v2 2 ? * -	% (z1*x2 - x1*z2)
+	v1 0 ? v2 1 ? * v1 1 ? v2 0 ? * -	% (x1*y2 - y1*x2)
     ]
+    end
 } .
 
 % Vector magnitude
-/vmag {				% v ==> r
-    aload pop dup mul exch dup mul add exch dup mul add sqrt
+/vmag {					% v ==> r
+    aload pop dup * ^ dup * + ^ dup * + sqrt
 } .
 
 % Vector 3D rotation around 3 axes with Roll (x), Pitch (y), then Yaw (z).
@@ -96,51 +103,52 @@
 %
 %   R = Rz(Yaw) Ry(Pitch) Rx(Roll)
 %
-%       [ c(Y)  -s(Y)  0 ] [  c(P)  0  s(P) ] [ 1  0      0    ]
-%     = | s(Y)   c(Y)  0 | |  0     1  0    | | 1  c(R)  -s(R) |
-%       [ 0      0     1 ] [ -s(P)  0  c(P) ] [ 0  s(R)   c(R) ]
+%	[ c(Y)	-s(Y)  0 ] [  c(P)  0  s(P) ] [ 1  0	  0    ]
+%     = | s(Y)	 c(Y)  0 | |  0	    1  0    | | 1  c(R)	 -s(R) |
+%	[ 0	 0     1 ] [ -s(P)  0  c(P) ] [ 0  s(R)	  c(R) ]
 %
-%       [ x c(Y) c(P) + y (c(Y) s(P) s(R) - s(Y) c(R)) + z (c(Y) s(P) c(R) + s(Y) s(R)) ]
+%	[ x c(Y) c(P) + y (c(Y) s(P) s(R) - s(Y) c(R)) + z (c(Y) s(P) c(R) + s(Y) s(R)) ]
 %  vR = | x s(Y) c(P) + y (s(Y) s(P) s(R) + c(Y) c(R)) + z (s(Y) s(P) c(R) - c(Y) s(R)) |
-%       [ x (-s(P))   + y c(P) s(R)                    + z c(P) c(R)                    ]
+%	[ x (-s(P))   + y c(P) s(R)		       + z c(P) c(R)			]
 
-/vrotate {	% v ==> v
-    9 dict begin   aload pop   /z '   /y '   /x '
+/vrotate {				% v ==> v
+    aload pop [/z /y /x] args
 
-    /cosR Roll  cos .   /sinR Roll  sin .
-    /cosP Pitch cos .   /sinP Pitch sin .
-    /cosY Yaw   cos .   /sinY Yaw   sin .
+    /cosR Roll	cos .	/sinR Roll  sin .
+    /cosP Pitch cos .	/sinP Pitch sin .
+    /cosY Yaw	cos .	/sinY Yaw   sin .
 
     [
-	x cosY mul cosP mul
-	y cosY sinP mul sinR mul sinY cosR mul sub mul add
-	z cosY sinP mul cosR mul sinY sinR mul add mul add
+	x cosY * cosP *
+	y cosY sinP * sinR * sinY cosR * - * +
+	z cosY sinP * cosR * sinY sinR * + * +
 
-	x sinY mul cosP mul
-	y sinY sinP mul sinR mul cosY cosR mul add mul add
-	z sinY sinP mul cosR mul cosY sinR mul sub mul add
+	x sinY * cosP *
+	y sinY sinP * sinR * cosY cosR * + * +
+	z sinY sinP * cosR * cosY sinR * - * +
 
-	x sinP neg mul
-	y cosP mul sinR mul add
-	z cosP mul cosR mul add
+	x sinP neg *
+	y cosP * sinR * +
+	z cosP * cosR * +
     ]
     end
 } .
 
 % Map a 3D point q to a 2D point p
 /xview {				% q ==> p
-    aload pop /_z ' /_y ' /_x '
+    aload pop [/z /y /x] args
     [
 	% screen x
-	_y   EyeDistance _x sub   div   EyeDistance mul
-	PageW 2 div mul
-	PageW 2 div add
+	y   EyeDistance x -   div   EyeDistance *
+	PageW 2 div *
+	PageW 2 div +
 
 	% screen y (assumes PageW is less than or equal to pageH)
-	_z   EyeDistance _x sub   div   EyeDistance mul
-	PageW 2 div mul
-	PageH 2 div add
+	z   EyeDistance x -   div   EyeDistance *
+	PageW 2 div *
+	PageH 2 div +
     ]
+    end
 } .
 
 % Take the midpoint of a line between two points in space
@@ -151,18 +159,18 @@
 % Average the points of a face to find the center of it, where
 % face is an array of 3D points given in counter-clockwise order.
 /fcenter {				% [q1 q2 q3 ...] ==> qavg
-    dup length exch			% 4 [q1 q2 q3 q4]
-    [0 0 0] exch			% 4 [0 0 0] [q1 q2 q3 q4]
+    dup length ^			% 4 [q1 q2 q3 q4]
+    [0 0 0] ^				% 4 [0 0 0] [q1 q2 q3 q4]
     { vadd } forall			% 4 qsum
-    exch vdiv				% qavg
+    ^ vdiv				% qavg
 } .
 
 % Determine a vector perpendicular to a face, where
 % face is an array of 3D points given in counter-clockwise order.
 /fperp {				% [q1 q2 q3 ...] ==> vp
-    dup 0 2 getinterval aload pop   	% [q1 q2 q3 ...] q1 q2
-    vsub exch				% (q1-q2) [q1 q2 q3 ...]
-    1 2 getinterval aload pop   	% (q1-q2) q2 q3
+    dup 0 2 getinterval aload pop	% [q1 q2 q3 ...] q1 q2
+    vsub ^				% (q1-q2) [q1 q2 q3 ...]
+    1 2 getinterval aload pop		% (q1-q2) q2 q3
     vsub				% (q1-q2) (q2-q3)
     vcross				% vp
     dup vmag				% vp r
@@ -200,26 +208,25 @@
 
 % Add an item to the end of a buffer, expanding it if necessary.
 /buf_add {					% buffer item buf_add ==>
-    /_item '
-    /_buffer '
-    /_occupancy _buffer 0 get .
-    /_storage _buffer 1 get .
-    _storage length _occupancy eq
+    [/item /buffer] args
+    /occupancy buffer 0 ? .
+    /storage buffer 1 ? .
+    storage length occupancy eq
     {	% If full, double the allocation
-	_storage length 2 mul array		% [x x x x x x x x]
-	dup 0 _storage putinterval		% [a b c d x x x x]
-	/_storage '
-	_buffer 1 _storage put
+	storage length 2 * array		% [x x x x x x x x]
+	dup 0 storage putinterval		% [a b c d x x x x]
+	/storage ^ .
+	buffer 1 storage !
     } if
-
-    _storage _occupancy _item put
-    _buffer 0 _occupancy 1 add put
+    storage occupancy item !
+    buffer 0 occupancy 1 + !
+    end
 } .
 
 % Convert a buffer to array (no copying required)
 /buf_toarray {					% buffer => array
     aload pop					% 3 [a b c x]
-    exch 0 exch					% [a b c x] 0 3
+    ^ 0 ^					% [a b c x] 0 3
     getinterval					% [a b c]
 } .
 
@@ -229,9 +236,7 @@
 % Each face is an array of three 3D points [q1 q2 q3]
 
 /pyramid {	% q1 q2 q3 q4 order ==> --
-    12 dict begin
-
-    /order ' /q4 ' /q3 ' /q2 ' /q1 '
+    [/order /q4 /q3 /q2 /q1] args
 
     order 1 gt {
 	% For order > 1, generate pyramid of order - 1
@@ -243,11 +248,11 @@
 	/q24 q2 q4 qmid .
 	/q34 q3 q4 qmid .
 
-	/order order 1 sub .
+	/order order 1 - .
 
 	q1  q12 q13 q14 order pyramid
-	q12 q2  q23 q24 order pyramid
-	q14 q24 q34 q4  order pyramid
+	q12 q2	q23 q24 order pyramid
+	q14 q24 q34 q4	order pyramid
 	q13 q23 q3  q34 order pyramid
     } {
 	% For order = 1, generate faces
@@ -267,41 +272,25 @@
 % The user compare function should take two elements "a b" from the stack
 % and return -1 if a < b, 1 if a > b, else 0.
 
-/heapswap {					% arr i j =>
-    3 dict begin
-    /j ' /i ' /arr '
-    arr i get
-    arr j get
-    arr exch i exch put
-    arr exch j exch put
-    end
-} .
-
-/heapcompare {					% arr i j comp => (-1 | 0 | 1)
-    4 dict begin
-    % Note: if I use cmp instead of comp, the result is an infinite loop
-    /comp ' /j ' /i ' /arr '
-    arr i get
-    arr j get
-    comp
-    end
+/aswap {					% arr i j => --
+    2 index 1 index ? ^				% arr arr i arr[j] j
+    3 index ^ 1 index 4 index ?			% arr arr i arr[j] arr j arr[i]
+    ! !						% --
 } .
 
 /heapsort {					% [] {cmp} => []
     % Heapify by bubbling up elements from end of array toward root
-    10 dict begin
-    /cmp ' /arr '
+    [/cmp /arr] args
 
     /len arr length .
 
-    1 1 len 1 sub {
-	/i '
-	/c i .
+    1 1 len 1 - {
+	/c ^ .
 	{
-	    /parent c 1 sub 2 idiv .
-	    arr c parent {cmp} heapcompare
+	    /parent c 1 - 2 idiv .
+	    arr c get	arr parent get	 cmp
 	    0 le {exit} if
-	    arr c parent heapswap
+	    arr c parent aswap
 	    /c parent .
 	    c 0 le {exit} if
 	} loop
@@ -312,25 +301,23 @@
     % heap, and bubbling down the new root.
 
     {
-	/len len 1 sub .
+	/len len 1 - .
 	len 0 le {exit} if
 
 	/c 0 .
 
-	arr c len heapswap
-
+	arr c len aswap
 	{
-	    /l c 2 mul 1 add .
-	    /r c 2 mul 2 add .
+	    /l c 2 * 1 + .
+	    /r c 2 * 2 + .
 
 	    l len ge {exit} if
 
-	    r len ge   arr l r {cmp} heapcompare 0 gt   or
+	    r len ge   arr l get   arr r get   cmp   0 gt   or
 	    { /side l . } { /side r . } ifelse
 
-	    arr c side {cmp} heapcompare 0 gt {exit} if
-
-	    arr c side heapswap
+	    arr c get	arr side get   cmp   0 gt {exit} if
+	    arr c side aswap
 	    /c side .
 	} loop
     } loop
@@ -352,15 +339,15 @@
     /faces faces buf_toarray .
 
     % Sort faces by order of increasing x (back to front)
-    faces { fcenter 0 get exch
-	    fcenter 0 get exch sub } heapsort
+    faces { fcenter 0 ? ^
+	    fcenter 0 ? ^ - } heapsort
 
     faces {
-	/face '
+	/face ^ .
 
-	/q1 face 0 get .
-	/q2 face 1 get .
-	/q3 face 2 get .
+	/q1 face 0 ? .
+	/q2 face 1 ? .
+	/q3 face 2 ? .
 
 	/p1 q1 xview .
 	/p2 q2 xview .
@@ -372,20 +359,20 @@
 	LightPos face fcenter vsub dup vmag vdiv	% unit vec face center to light
 	face fperp					% unit vec face perpendicular
 	vdot						% cosine of angle between them
-	1 add 2 div					% range (-1, 1) ==> (0, 1)
+	1 + 2 div					% range (-1, 1) ==> (0, 1)
 	1
 	LightPos face fcenter vsub vmag			% distance face center to light
-	0.1 add						% just to make sure it's not zero
-	dup mul div mul LightBrightness mul		% cosine * brightness / distance^2
+	0.1 +						% just to make sure it's not zero
+	dup * div * LightBrightness *			% cosine * brightness / distance^2
 	dup 1 gt {pop 1} if				% clamp between 0 and 1
 	setgray
 
 	% Fill the face
-	p1 pmoveto   p2 plineto   p3 plineto   closepath fill
+	p1 pmoveto   p2 plineto	  p3 plineto   closepath fill
 
 	% Outline the face in a darker color
 	EdgeBrightness setgray
-	p1 pmoveto   p2 plineto   p3 plineto   closepath stroke
+	p1 pmoveto   p2 plineto	  p3 plineto   closepath stroke
 
 	{
 	    % Draw the axes (for debugging)
@@ -394,9 +381,9 @@
 	    /px [0.1 0 0] xview .
 	    /py [0 0.2 0] xview .
 	    /pz [0 0 0.3] xview .
-	    p0 pmoveto   px plineto   stroke
-	    p0 pmoveto   py plineto   stroke
-	    p0 pmoveto   pz plineto   stroke
+	    p0 pmoveto	 px plineto   stroke
+	    p0 pmoveto	 py plineto   stroke
+	    p0 pmoveto	 pz plineto   stroke
 	} pop % exec
     } forall
 } .

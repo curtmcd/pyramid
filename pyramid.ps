@@ -3,10 +3,10 @@
 % Sierpinski Pyramid Fractal in PostScript
 %
 % Initial version from 1995
-%   Curt.McDowell@andrew.cmu.edu
+%   Curt McDowell <cm26@andrew.cmu.edu>
 %   Carnegie-Mellon University
 %
-% Updated 2020
+% Redone 2020
 %   Curt McDowell <coder@fishlet.com>
 %
 % Coordinate systems
@@ -19,11 +19,11 @@
 % sub-pyramids by connecting midpoints of the six edges.
 %
 % This operates naively by first generating all of the faces, then
-% sorting them from back to front, then drawing them. There is no
-% backface culling or other efficiency. Shadows are not rendered.
+% sorting them from back to front, then drawing them shaded. There is
+% no backface culling or other efficiency. Shadows are not rendered.
 %
-% The xview function has primitive support for perspective. The smaller
-% EyeDistance is, the more perspective distortion is seen.
+% The xview function has primitive support for single-point perspective.
+% The smaller EyeDistance is, the more perspective distortion is seen.
 
 /. {def} def /^ {exch} def /? {get} def /! {put} def
 /+ {add} def /- {sub} def /* {mul} def
@@ -38,23 +38,25 @@
 /EyeDistance 3 .
 /EdgeBrightness 0.55 .
 
-% Print stack contents bottom to top (for debugging)
-/p {
-    count 1 - -1 0 { index == } for
-} .
+% Print stack contents bottom to top (for command line debugging)
+/p { count 1 - -1 0 { index == } for } .	% p --
 
-/args {
+% Helper to start dict for parms taken off stack, with extra room for locals
+/args {						% [... /parm2 /parm1] args --
     12 dict begin {^ .} forall
 } .
 
+% Swap two elements of an array.
+/arr_exch {					% arr i j arr_exch --
+    2 index 1 index ? ^				% arr i arr[j] j
+    3 index ^ 1 index 4 index ?			% arr i arr[j] arr j arr[i]
+    ! !
+} .
+
 % Vector element-wise binary operation
-/vbinop {				% v1 v2 {op} ==> vr
+/vbinop {					% v1 v2 {op} vbinop -- vr
     [/op /v2 /v1] args
-    [
-	v1 0 ? v2 0 ? op exec
-	v1 1 ? v2 1 ? op exec
-	v1 2 ? v2 2 ? op exec
-    ]
+    [ v1 0 ? v2 0 ? op   v1 1 ? v2 1 ? op   v1 2 ? v2 2 ? op ]
     end
 } .
 
@@ -62,27 +64,23 @@
 /vsub { {-} vbinop } .
 
 % Vector divide
-/vdiv {					% v r ==> (v/r)
+/vdiv {						% v r vdiv -- (v/r)
     [/r /v] args
-    [
-	v 0 ? r div
-	v 1 ? r div
-	v 2 ? r div
-    ]
+    [ v 0 ? r div   v 1 ? r div   v 2 ? r div ]
     end
 } .
 
 % Vector 3D dot product
-/vdot {					% v1 v2 ==> vd
+/vdot {						% v1 v2 vdot -- vd
     [/v2 /v1] args
-    v1 0 ? v2 0 ? *			% (x1*x2)
-    v1 1 ? v2 1 ? * +			% ((x1*x2)+(y1*y2))
-    v1 2 ? v2 2 ? * +			% vd
+    v1 0 ? v2 0 ? *				% (x1*x2)
+    v1 1 ? v2 1 ? * +				% ((x1*x2)+(y1*y2))
+    v1 2 ? v2 2 ? * +				% vd
     end
 } .
 
 % Vector 3D cross product
-/vcross {				% v1 v2 ==> vc
+/vcross {					% v1 v2 vcross -- vc
     [/v2 /v1] args
     [
 	v1 1 ? v2 2 ? * v1 2 ? v2 1 ? * -	% (y1*z2 - z1*y2)
@@ -93,11 +91,11 @@
 } .
 
 % Vector magnitude
-/vmag {					% v ==> r
+/vmag {						% v vmag -- r
     aload pop dup * ^ dup * + ^ dup * + sqrt
 } .
 
-% Vector 3D rotation around 3 axes with Roll (x), Pitch (y), then Yaw (z).
+% Vector 3D rotation around x axis by Roll, then y axis by Pitch, then z axis by Yaw.
 %
 % From Wikipedia "Rotation matrix":
 %
@@ -111,108 +109,82 @@
 %  vR = | x s(Y) c(P) + y (s(Y) s(P) s(R) + c(Y) c(R)) + z (s(Y) s(P) c(R) - c(Y) s(R)) |
 %	[ x (-s(P))   + y c(P) s(R)		       + z c(P) c(R)			]
 
-/vrotate {				% v ==> v
+/vrotate {					% v vrotate ==> v
     aload pop [/z /y /x] args
-
-    /cosR Roll	cos .	/sinR Roll  sin .
-    /cosP Pitch cos .	/sinP Pitch sin .
-    /cosY Yaw	cos .	/sinY Yaw   sin .
-
+    /cR Roll  cos .	/sR Roll  sin .
+    /cP Pitch cos .	/sP Pitch sin .
+    /cY Yaw   cos .	/sY Yaw   sin .
     [
-	x cosY * cosP *
-	y cosY sinP * sinR * sinY cosR * - * +
-	z cosY sinP * cosR * sinY sinR * + * +
-
-	x sinY * cosP *
-	y sinY sinP * sinR * cosY cosR * + * +
-	z sinY sinP * cosR * cosY sinR * - * +
-
-	x sinP neg *
-	y cosP * sinR * +
-	z cosP * cosR * +
+	x cY * cP * y cY sP * sR * sY cR * - * + z cY sP * cR * sY sR * + * +
+	x sY * cP * y sY sP * sR * cY cR * + * + z sY sP * cR * cY sR * - * +
+	x sP neg * y cP * sR * + z cP * cR * +
     ]
     end
 } .
 
 % Map a 3D point q to a 2D point p
-/xview {				% q ==> p
+/xview {					% q xview -- p
     aload pop [/z /y /x] args
+    /figureW PageW PageH min .
     [
 	% screen x
 	y   EyeDistance x -   div   EyeDistance *
-	PageW 2 div *
-	PageW 2 div +
+	figureW 2 div * PageW 2 div +
 
-	% screen y (assumes PageW is less than or equal to pageH)
+	% screen y
 	z   EyeDistance x -   div   EyeDistance *
-	PageW 2 div *
-	PageH 2 div +
+	figureW 2 div * PageH 2 div +
     ]
     end
 } .
 
 % Take the midpoint of a line between two points in space
-/qmid {					% q1 q2 ==> (q1 + q2)/2
-    vadd 2 vdiv
+/qmid {	vadd 2 vdiv } .				% q1 q2 qmid -- (q1 + q2)/2
+
+% Average the points of a face to find the center of it,
+% where face is an array of 3D points given in counter-clockwise order.
+/fcenter {					% [q1 q2 q3 ...] fcenter -- qavg
+    dup length ^				% n [q1 q2 ...]
+    [0 0 0] ^					% n [0 0 0] [q1 q2 ...]
+    { vadd } forall				% n qsum
+    ^ vdiv					% qavg
 } .
 
-% Average the points of a face to find the center of it, where
-% face is an array of 3D points given in counter-clockwise order.
-/fcenter {				% [q1 q2 q3 ...] ==> qavg
-    dup length ^			% 4 [q1 q2 q3 q4]
-    [0 0 0] ^				% 4 [0 0 0] [q1 q2 q3 q4]
-    { vadd } forall			% 4 qsum
-    ^ vdiv				% qavg
-} .
-
-% Determine a vector perpendicular to a face, where
-% face is an array of 3D points given in counter-clockwise order.
-/fperp {				% [q1 q2 q3 ...] ==> vp
-    dup 0 2 getinterval aload pop	% [q1 q2 q3 ...] q1 q2
-    vsub ^				% (q1-q2) [q1 q2 q3 ...]
-    1 2 getinterval aload pop		% (q1-q2) q2 q3
-    vsub				% (q1-q2) (q2-q3)
-    vcross				% vp
-    dup vmag				% vp r
+% Determine the unit normal vector to a face,
+% where face is an array of 3D points given in counter-clockwise order.
+/fnorm {					% [q1 q2 q3 ...] fnorm -- vp
+    dup 0 2 getinterval aload pop		% [q1 q2 q3 ...] q1 q2
+    vsub ^					% (q1-q2) [q1 q2 q3 ...]
+    1 2 getinterval aload pop			% (q1-q2) q2 q3
+    vsub					% (q1-q2) (q2-q3)
+    vcross					% vp
+    dup vmag					% vp r
     vdiv
 } .
 
 % Point draw functions, where p = [x y]
-/pmoveto {				% p ==> --
-    aload pop moveto
-} .
+/pmoveto { aload pop moveto } .			% p pmoveto --
+/plineto { aload pop lineto } .			% p plineto --
 
-/plineto {				% p ==> --
-    aload pop lineto
-} .
+% Buffer datatype:
+%   A buffer is an expandable array. It's stored as an array of two elements,
+%   the first being the occupancy and the second being the storage array of items.
+%   The storage array is grown in powers of 2 whenever its size is exceeded.
+%   This allows adding one item at a time with a reasonably small amount of copying.
+%   Example if a buffer has sufficient capacity for a new item
+%     [3 [a b c x]] e ==> [3 [a b c e]]
+%   When a buffer is full, it gets copied and its capacity is doubled
+%     [4 [a b c d]] e ==> [5 [a b c d e x x x]]
+%   The buffer may be converted to a regular array with little expense.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% Buffer datatype (expandable array)
-%
-% The buffer is stored as an array of two elements, the first being the
-% number of items in the buffer and the second being an array containing
-% the items, where the array may be large than the number of items.
-% This allows adding one item at a time with a reasonably small amount of copying.
-%
-% Example if a buffer has sufficient capacity for a new item
-%   [3 [a b c x]] e ==> [3 [a b c e]]
-%
-% When a buffer is full, it gets copied and its capacity is doubled
-%   [4 [a b c d]] e ==> [5 [a b c d e x x x]]
+/buf_new { [ 0 [ null ] ] } .			% buf_new -- buffer
 
-% Create an empty buffer
-/buf_new {					% buf_new ==> buffer
-    [ 0 [ null ] ]
-} .
-
-% Add an item to the end of a buffer, expanding it if necessary.
-/buf_add {					% buffer item buf_add ==>
+/buf_add {					% buffer item buf_add --
     [/item /buffer] args
     /occupancy buffer 0 ? .
     /storage buffer 1 ? .
     storage length occupancy eq
-    {	% If full, double the allocation
+    {	% Full; double the storage and copy the old storage into it
 	storage length 2 * array		% [x x x x x x x x]
 	dup 0 storage putinterval		% [a b c d x x x x]
 	/storage ^ .
@@ -223,112 +195,85 @@
     end
 } .
 
-% Convert a buffer to array (no copying required)
-/buf_toarray {					% buffer => array
+/buf_toarray {					% buffer buf_toarray -- array
     aload pop					% 3 [a b c x]
     ^ 0 ^					% [a b c x] 0 3
     getinterval					% [a b c]
 } .
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Generate the faces of a pyramid and store them in the 'faces' buffer.
+% Each face is an array of three 3D points [q1 q2 q3] in counter-clockwise order.
 
-% Generate the faces of a pyramid
-% Each face is an array of three 3D points [q1 q2 q3]
-
-/pyramid {	% q1 q2 q3 q4 order ==> --
+/pyramid {					% q1 q2 q3 q4 order pyramid --
     [/order /q4 /q3 /q2 /q1] args
-
-    order 1 gt {
-	% For order > 1, generate pyramid of order - 1
-
-	/q12 q1 q2 qmid .
-	/q13 q1 q3 qmid .
-	/q14 q1 q4 qmid .
-	/q23 q2 q3 qmid .
-	/q24 q2 q4 qmid .
-	/q34 q3 q4 qmid .
-
+    order 1 gt {	% For (order > 1), generate pyramid (order - 1)
+	/q12 q1 q2 qmid .   /q13 q1 q3 qmid .   /q14 q1 q4 qmid .
+	/q23 q2 q3 qmid .   /q24 q2 q4 qmid .   /q34 q3 q4 qmid .
 	/order order 1 - .
-
 	q1  q12 q13 q14 order pyramid
 	q12 q2	q23 q24 order pyramid
 	q14 q24 q34 q4	order pyramid
 	q13 q23 q3  q34 order pyramid
-    } {
-	% For order = 1, generate faces
-	% As counter-clockwise polygons
-
+    } {			% For (order 1), the smallest pyramid, generate four faces
 	faces [q2 q1 q3] buf_add		% front left
 	faces [q1 q4 q3] buf_add		% front right
 	faces [q3 q4 q2] buf_add		% back
 	faces [q1 q2 q4] buf_add		% bottom
     } ifelse
-
     end
 } .
 
-% Heap sort
-%
-% The user compare function should take two elements "a b" from the stack
-% and return -1 if a < b, 1 if a > b, else 0.
+% Heap sort:
+%   Compare function (a b cmpfn --) should return -1 if a < b, 1 if a > b, else 0.
 
-/aswap {					% arr i j => --
-    2 index 1 index ? ^				% arr arr i arr[j] j
-    3 index ^ 1 index 4 index ?			% arr arr i arr[j] arr j arr[i]
-    ! !						% --
-} .
-
-/heapsort {					% [] {cmp} => []
-    % Heapify by bubbling up elements from end of array toward root
-    [/cmp /arr] args
-
+/heapsort {					% array cmpfn heapsort --
+    [/cmpfn /arr] args
     /len arr length .
-
+    % Step 1: heapify by bubbling up elements from end of array toward root
     1 1 len 1 - {
 	/c ^ .
 	{
 	    /parent c 1 - 2 idiv .
-	    arr c get	arr parent get	 cmp
+	    arr c get	arr parent get	 cmpfn
 	    0 le {exit} if
-	    arr c parent aswap
+	    arr c parent arr_exch
 	    /c parent .
 	    c 0 le {exit} if
 	} loop
     } for
-
-    % Sort by repeatedly swapping the greatest element (found at the
-    % root) with the last element, excluding the last element from the
+    % Step 2: sort by repeatedly swapping the greatest element (found at
+    % the root) with the last element, excluding the last element from the
     % heap, and bubbling down the new root.
-
     {
 	/len len 1 - .
 	len 0 le {exit} if
-
 	/c 0 .
-
-	arr c len aswap
+	arr c len arr_exch
 	{
-	    /l c 2 * 1 + .
-	    /r c 2 * 2 + .
-
-	    l len ge {exit} if
-
-	    r len ge   arr l get   arr r get   cmp   0 gt   or
-	    { /side l . } { /side r . } ifelse
-
-	    arr c get	arr side get   cmp   0 gt {exit} if
-	    arr c side aswap
+	    c 2 * 1 + dup /l ^ . 1 + /r ^ .	% Calc l/r child index
+	    l len ge {exit} if	    		% Done if l out of bounds.
+	    % Pick side to bubble down (l/r), whichever is bigger,
+	    % but may only pick r if within bounds.
+	    r len ge {
+		l
+	    } {
+		arr l get   arr r get   cmpfn   0 lt
+		{ r } { l } ifelse
+	    } ifelse
+	    /side ^ .
+	    % Stop bubbling if greater than l/r options.
+	    arr c get	arr side get   cmpfn   0 gt {exit} if
+	    arr c side arr_exch
 	    /c side .
 	} loop
     } loop
-
     end
 } .
 
 /rp Side .
 /rn rp neg .
 
-/render {
+/render {					% render --
     /q1 [rp rp rp] vrotate .
     /q2 [rp rn rn] vrotate .
     /q3 [rn rn rp] vrotate .
@@ -357,7 +302,7 @@
 	% XXX Should probably forget the distance thing. There's no shadows
 	% XXX so it doesn't make much sense to try to light it.
 	LightPos face fcenter vsub dup vmag vdiv	% unit vec face center to light
-	face fperp					% unit vec face perpendicular
+	face fnorm					% unit vec face perpendicular
 	vdot						% cosine of angle between them
 	1 + 2 div					% range (-1, 1) ==> (0, 1)
 	1
@@ -373,18 +318,6 @@
 	% Outline the face in a darker color
 	EdgeBrightness setgray
 	p1 pmoveto   p2 plineto	  p3 plineto   closepath stroke
-
-	{
-	    % Draw the axes (for debugging)
-	    0 setgray
-	    /p0 [0 0 0] xview .
-	    /px [0.1 0 0] xview .
-	    /py [0 0.2 0] xview .
-	    /pz [0 0 0.3] xview .
-	    p0 pmoveto	 px plineto   stroke
-	    p0 pmoveto	 py plineto   stroke
-	    p0 pmoveto	 pz plineto   stroke
-	} pop % exec
     } forall
 } .
 

@@ -5,10 +5,12 @@ This is a PostScript program that draws the famous shaded fractal object.
 PostScript is not a good general purpose language. It makes things
 unnecessarily difficult, relative to today's languages, as a lot of
 trivial functionality is missing -- simple things like real parameter
-passing, local variables, string or array concatenation, etc. The code
-to work around these things can be ugly and painful.
+passing, local variables, infix expressions, string or array
+concatenation, etc. The code to work around these things can be ugly,
+and slow and painstaking to write.
 
-But the graphics are neat.
+But the graphics are neat and that's what it's for. Most PostScript code
+is automatically generated and obfuscated.
 
 I wrote a simple version of this while at Carnegie Mellon in 1995
 (`pyramid-cmu1.ps`, `pyramid-cmu1p.ps`). That version was quick and
